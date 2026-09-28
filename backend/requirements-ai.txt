@@ -1,0 +1,5 @@
+# Optional: CLIP visual matching ("which of my items is this?").
+# Adds ~1-2 GB (PyTorch). Weights download once (~350 MB), then run offline.
+# CPU-only PyTorch is smaller:  pip install torch --index-url https://download.pytorch.org/whl/cpu
+torch>=2.2
+open_clip_torch>=2.24
