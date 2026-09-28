@@ -34,6 +34,8 @@ export interface Draft {
   description: string;
   color: string;
   material: string;
+  size: string;
+  price_cents: number | null;
   tags: string[];
 }
 
@@ -133,7 +135,13 @@ export const api = {
     fd.append("file", file, "photo.jpg");
     return req<ScanResult>("/api/scan", { method: "POST", body: fd });
   },
-  describe: (image_path: string) => req<Draft>("/api/describe", json("POST", { image_path })),
+  savePhoto: (file: Blob) => {
+    const fd = new FormData();
+    fd.append("file", file, "tag.jpg");
+    return req<{ image_path: string }>("/api/photos", { method: "POST", body: fd });
+  },
+  describe: (image_path: string, tag_image_path?: string) =>
+    req<Draft>("/api/describe", json("POST", { image_path, tag_image_path })),
 
   sell: (item_id: number, quantity = 1, unit_price_cents?: number) =>
     req<Sale>("/api/sales", json("POST", { item_id, quantity, unit_price_cents })),

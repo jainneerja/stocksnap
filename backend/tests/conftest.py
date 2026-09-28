@@ -24,19 +24,24 @@ class FakeVision:
 
     def __init__(self, fail: bool = False):
         self.fail = fail
+        self.calls: list[int] = []  # number of images per call
 
     def status(self):
         return {"available": not self.fail, "model": self.model, "detail": "fake"}
 
-    def describe(self, img):
+    def describe(self, images):
         if self.fail:
             raise VisionUnavailable("down")
+        self.calls.append(len(images))
+        has_tag = len(images) > 1
         return Draft(
             name="Rhododendron Tee",
             category="T-shirt",
             description="Soft organic cotton tee with a hand-drawn rhododendron.",
             color="pink",
             material="cotton",
+            size="M" if has_tag else "",
+            price_cents=2800 if has_tag else None,
             tags=["washington", "floral", "tee"],
         )
 
@@ -46,7 +51,9 @@ def make_client(tmp_path):
     def _make(vision_fails: bool = False):
         settings = Settings(data_dir=tmp_path / "data", matcher="lite", match_threshold=0.9)
         ai = AI(vision=FakeVision(vision_fails), embedder=LiteEmbedder(), match_threshold=0.9)
-        return TestClient(create_app(settings, ai))
+        c = TestClient(create_app(settings, ai))
+        c.vision = ai.vision
+        return c
 
     return _make
 

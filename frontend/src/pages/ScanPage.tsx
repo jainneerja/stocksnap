@@ -1,15 +1,19 @@
 import { useState } from "react";
 import { api, imageUrl, type Item, type ScanResult } from "../api";
-import { emptyForm, ItemForm, type FormValues } from "../components/ItemForm";
+import { emptyForm, formFromItem, ItemForm, type FormValues } from "../components/ItemForm";
 import { PhotoButton } from "../components/PhotoButton";
-import { money } from "../format";
+import { money, toDollars } from "../format";
 
+/** `base` is set when adding a new size of a product you already stock. */
 type Stage =
   | { kind: "start" }
   | { kind: "scanning" }
   | { kind: "known"; scan: ScanResult; candidates: Item[] }
-  | { kind: "new"; scan: ScanResult }
+  | { kind: "tag"; scan: ScanResult; base?: Item; busy?: boolean }
+  | { kind: "new"; scan: ScanResult; base?: Item; tagPath?: string }
   | { kind: "saved"; item: Item };
+
+const NO_PHOTO: ScanResult = { image_path: "", barcode: null, barcode_format: null, barcode_item: null, matches: [] };
 
 export function ScanPage({ toast }: { toast: (msg: string) => void }) {
   const [stage, setStage] = useState<Stage>({ kind: "start" });
@@ -27,30 +31,55 @@ export function ScanPage({ toast }: { toast: (msg: string) => void }) {
         ...scan.matches.map((m) => m.item).filter((i) => i.id !== scan.barcode_item?.id),
       ];
       if (candidates.length) setStage({ kind: "known", scan, candidates });
-      else startNew(scan);
+      else setStage({ kind: "tag", scan });
     } catch (e) {
       setError((e as Error).message);
       setStage({ kind: "start" });
     }
   }
 
-  function startNew(scan: ScanResult) {
-    setForm({ ...emptyForm, barcode: scan.barcode ?? "" });
-    setStage({ kind: "new", scan });
+  async function onTagPhoto(scan: ScanResult, base: Item | undefined, file: File) {
+    setStage({ kind: "tag", scan, base, busy: true });
+    try {
+      const { image_path } = await api.savePhoto(file);
+      openForm(scan, base, image_path);
+    } catch (e) {
+      toast((e as Error).message);
+      setStage({ kind: "tag", scan, base });
+    }
+  }
+
+  function openForm(scan: ScanResult, base?: Item, tagPath?: string) {
+    // New size of an existing product: copy its details, leave size (and stock) blank.
+    const start = base
+      ? { ...formFromItem(base), size: "", sku: "", barcode: scan.barcode ?? "", quantity: "1" }
+      : { ...emptyForm, barcode: scan.barcode ?? "" };
+    setForm(start);
+    setStage({ kind: "new", scan, base, tagPath });
     if (!scan.image_path) return; // manual entry, nothing for the AI to look at
+
     setAiBusy(true);
     api
-      .describe(scan.image_path)
+      .describe(scan.image_path, tagPath)
       .then((d) =>
-        setForm((f) => ({
-          ...f,
-          name: d.name,
-          category: d.category,
-          description: d.description,
-          color: d.color,
-          material: d.material,
-          tags: d.tags.join(", "),
-        })),
+        setForm((f) => {
+          const price = d.price_cents ? toDollars(d.price_cents) : "";
+          if (base) {
+            // Keep the product's details; only take what the tag tells us.
+            return { ...f, size: d.size || f.size, price: price || f.price };
+          }
+          return {
+            ...f,
+            name: d.name,
+            category: d.category,
+            description: d.description,
+            color: d.color,
+            material: d.material,
+            size: d.size,
+            price,
+            tags: d.tags.join(", "),
+          };
+        }),
       )
       .catch((e) => toast((e as Error).message))
       .finally(() => setAiBusy(false));
@@ -58,7 +87,7 @@ export function ScanPage({ toast }: { toast: (msg: string) => void }) {
 
   async function restock(item: Item, n: number) {
     const updated = await api.adjust(item.id, n);
-    toast(`${updated.name}: now ${updated.quantity} in stock`);
+    toast(`${updated.name}${updated.size ? ` (${updated.size})` : ""}: now ${updated.quantity} in stock`);
     setStage({ kind: "start" });
   }
 
@@ -68,11 +97,11 @@ export function ScanPage({ toast }: { toast: (msg: string) => void }) {
         <div className="hero">
           <h1>Add stock</h1>
           <p className="muted">
-            Snap a photo of an item. StockSnap reads any barcode, checks if you already have it,
-            and drafts a listing with local AI — nothing leaves this computer.
+            Snap a photo of an item. StockSnap reads any barcode, checks if you already have it, and drafts a
+            listing with local AI. Nothing leaves this computer.
           </p>
           <PhotoButton label="Take a photo" onPhoto={onPhoto} />
-          <button className="link" onClick={() => startNew({ image_path: "", barcode: null, barcode_format: null, barcode_item: null, matches: [] })}>
+          <button className="link" onClick={() => openForm(NO_PHOTO)}>
             or add an item without a photo
           </button>
           {error && <p className="error">{error}</p>}
@@ -99,35 +128,70 @@ export function ScanPage({ toast }: { toast: (msg: string) => void }) {
               <div className="card" key={it.id}>
                 {it.image_path && <img src={imageUrl(it.image_path)} alt="" />}
                 <div className="card-body">
-                  <strong>{it.name}</strong>
+                  <strong>
+                    {it.name}
+                    {it.size && <span className="size-chip">{it.size}</span>}
+                  </strong>
                   <span className="muted">
                     {it.sku} · {money(it.price_cents)} · {it.quantity} in stock
                   </span>
                   <div className="actions">
                     <button className="btn btn-primary" onClick={() => restock(it, 1)}>+1 stock</button>
                     <button className="btn btn-secondary" onClick={() => restock(it, 5)}>+5</button>
+                    <button className="btn btn-secondary" onClick={() => setStage({ kind: "tag", scan: stage.scan, base: it })}>
+                      Different size
+                    </button>
                   </div>
                 </div>
               </div>
             ))}
           </div>
           <div className="actions">
-            <button className="btn btn-secondary btn-big" onClick={() => startNew(stage.scan)}>
+            <button className="btn btn-secondary btn-big" onClick={() => setStage({ kind: "tag", scan: stage.scan })}>
               No, it's a new item
             </button>
           </div>
         </div>
       )}
 
+      {stage.kind === "tag" && (
+        <div className="hero">
+          <div className="thumbs">
+            {stage.scan.image_path && <img src={imageUrl(stage.scan.image_path)} alt="" />}
+            <div className="tag-ph" aria-hidden>
+              <TagIcon />
+            </div>
+          </div>
+          <h2>Is there a size or price tag?</h2>
+          <p className="muted">
+            {stage.base
+              ? `Adding a new size of ${stage.base.name}. Snap the size label and the AI will read it.`
+              : "Snap a close-up of the label or hang tag and the AI will read the size and price for you."}
+          </p>
+          {stage.busy ? (
+            <span className="spinner big" />
+          ) : (
+            <>
+              <PhotoButton label="Photo of the tag" onPhoto={(f) => onTagPhoto(stage.scan, stage.base, f)} />
+              <button className="btn btn-secondary" onClick={() => openForm(stage.scan, stage.base)}>
+                No tag, skip
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       {stage.kind === "new" && (
         <div>
-          <h2>New item</h2>
+          <h2>{stage.base ? `New size of ${stage.base.name}` : "New item"}</h2>
           <ItemForm
             initial={form}
             imagePath={stage.scan.image_path || null}
+            tagImagePath={stage.tagPath}
             aiBusy={aiBusy}
             submitLabel="Save to inventory"
             onCancel={() => setStage({ kind: "start" })}
+            onAddStock={(it) => restock(it, 1)}
             onSubmit={async (data) => {
               const item = await api.createItem(data);
               setStage({ kind: "saved", item });
@@ -140,12 +204,22 @@ export function ScanPage({ toast }: { toast: (msg: string) => void }) {
         <div className="hero">
           <h2>Saved ✓</h2>
           <p>
-            <strong>{stage.item.name}</strong> ({stage.item.sku}) — {stage.item.quantity} in stock at{" "}
+            <strong>{stage.item.name}</strong>
+            {stage.item.size && ` · size ${stage.item.size}`} ({stage.item.sku}): {stage.item.quantity} in stock at{" "}
             {money(stage.item.price_cents)}
           </p>
           <PhotoButton label="Scan the next item" onPhoto={onPhoto} />
         </div>
       )}
     </section>
+  );
+}
+
+function TagIcon() {
+  return (
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z" />
+      <circle cx="8" cy="8" r="1.6" />
+    </svg>
   );
 }

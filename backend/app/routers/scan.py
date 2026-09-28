@@ -2,7 +2,9 @@
 
 Split into two calls on purpose:
   POST /api/scan      fast (<1s): save photo, read barcode, find look-alike items
-  POST /api/describe  slow (seconds on CPU): local vision model drafts the listing
+  POST /api/photos    save an extra photo only (e.g. a close-up of the size tag)
+  POST /api/describe  slow (seconds on CPU): local vision model drafts the listing,
+                      reading size/price from the optional tag photo
 The UI shows scan results immediately and fills in the AI draft when it arrives.
 """
 
@@ -40,20 +42,28 @@ class ScanResult(BaseModel):
 
 class DescribeRequest(BaseModel):
     image_path: str
+    tag_image_path: Optional[str] = None  # close-up of label / hang tag
+
+
+class PhotoSaved(BaseModel):
+    image_path: str
+
+
+async def _read_upload(file: UploadFile):
+    data = await file.read()
+    if len(data) > MAX_UPLOAD:
+        raise HTTPException(413, "Photo is too large (max 15 MB)")
+    try:
+        return load_image(data)
+    except InvalidImage as exc:
+        raise HTTPException(400, str(exc))
 
 
 @router.post("/scan", response_model=ScanResult)
 async def scan(
     request: Request, file: UploadFile = File(...), session: Session = Depends(get_session)
 ):
-    data = await file.read()
-    if len(data) > MAX_UPLOAD:
-        raise HTTPException(413, "Photo is too large (max 15 MB)")
-    try:
-        img = load_image(data)
-    except InvalidImage as exc:
-        raise HTTPException(400, str(exc))
-
+    img = await _read_upload(file)
     settings = request.app.state.settings
     name = save_image(img, settings.images_dir, settings.max_image_px)
     result = ScanResult(image_path=name)
@@ -74,14 +84,25 @@ async def scan(
     return result
 
 
+@router.post("/photos", response_model=PhotoSaved)
+async def save_photo(request: Request, file: UploadFile = File(...)):
+    img = await _read_upload(file)
+    settings = request.app.state.settings
+    # Keep tag close-ups sharper so small print stays legible.
+    return PhotoSaved(image_path=save_image(img, settings.images_dir, max(settings.max_image_px, 1600)))
+
+
 @router.post("/describe")
 def describe(body: DescribeRequest, request: Request):
+    images_dir = request.app.state.settings.images_dir
     try:
-        path = resolve_image(request.app.state.settings.images_dir, body.image_path)
+        paths = [resolve_image(images_dir, body.image_path)]
+        if body.tag_image_path:
+            paths.append(resolve_image(images_dir, body.tag_image_path))
     except FileNotFoundError:
         raise HTTPException(404, "Image not found")
     try:
-        draft = request.app.state.ai.vision.describe(load_image(path.read_bytes()))
+        draft = request.app.state.ai.vision.describe([load_image(p.read_bytes()) for p in paths])
     except VisionUnavailable:
         # Graceful fallback: the user just types the details in.
         raise HTTPException(

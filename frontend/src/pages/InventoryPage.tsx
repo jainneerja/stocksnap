@@ -40,6 +40,7 @@ export function InventoryPage({ toast }: { toast: (msg: string) => void }) {
         <ItemForm
           initial={formFromItem(editing)}
           imagePath={editing.image_path}
+          editingId={editing.id}
           submitLabel="Save changes"
           onCancel={() => setEditing(null)}
           onSubmit={async (data) => {
@@ -75,8 +76,8 @@ export function InventoryPage({ toast }: { toast: (msg: string) => void }) {
             <button className="inv-main" onClick={() => setEditing(it)}>
               <strong>{it.name}</strong>
               <span className="muted">
-                {it.sku}
-                {it.size && ` · ${it.size}`} · {money(it.price_cents)}
+                {it.size && <span className="size-chip">{it.size}</span>}
+                {it.sku} · {money(it.price_cents)}
               </span>
             </button>
             <div className="stepper">

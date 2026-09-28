@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { imageUrl, type Item, type ItemInput } from "../api";
+import { useEffect, useState } from "react";
+import { api, imageUrl, type Item, type ItemInput } from "../api";
 import { toCents, toDollars } from "../format";
 
 export interface FormValues {
@@ -31,20 +31,29 @@ export function formFromItem(i: Item): FormValues {
   };
 }
 
+const norm = (t: string) => t.trim().replace(/\s+/g, " ").toLowerCase();
+
 export function ItemForm({
   initial,
   imagePath,
+  tagImagePath,
   aiBusy,
   submitLabel,
   onSubmit,
   onCancel,
+  onAddStock,
+  editingId,
 }: {
   initial: FormValues;
   imagePath?: string | null;
+  tagImagePath?: string | null;
   aiBusy?: boolean;
   submitLabel: string;
   onSubmit: (data: ItemInput) => Promise<void>;
   onCancel?: () => void;
+  /** When set, the form warns about an existing item with the same name + size. */
+  onAddStock?: (item: Item) => void;
+  editingId?: number;
 }) {
   const [v, setV] = useState(initial);
   const [error, setError] = useState("");
@@ -63,6 +72,22 @@ export function ItemForm({
       return next;
     });
   }
+
+  // Other sizes of the same product already in inventory (matched by name).
+  const [siblings, setSiblings] = useState<Item[]>([]);
+  useEffect(() => {
+    const name = norm(v.name);
+    if (!name) return setSiblings([]);
+    const t = setTimeout(() => {
+      api
+        .items(v.name.trim())
+        .then((all) => setSiblings(all.filter((i) => norm(i.name) === name && i.id !== editingId)))
+        .catch(() => setSiblings([]));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [v.name, editingId]);
+  const sameSize = v.size.trim() ? siblings.find((i) => norm(i.size) === norm(v.size)) : undefined;
+  const otherSizes = siblings.filter((i) => i.size && i !== sameSize);
 
   const set = (k: keyof FormValues) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setV({ ...v, [k]: e.target.value });
@@ -94,16 +119,27 @@ export function ItemForm({
 
   return (
     <form className="item-form" onSubmit={submit}>
-      {imagePath && <img className="form-photo" src={imageUrl(imagePath)} alt="" />}
+      {(imagePath || tagImagePath) && (
+        <div className="form-photos">
+          {imagePath && <img className="form-photo" src={imageUrl(imagePath)} alt="Product" />}
+          {tagImagePath && <img className="form-photo tag" src={imageUrl(tagImagePath)} alt="Size tag" />}
+        </div>
+      )}
       {aiBusy && (
         <p className="ai-note">
           <span className="spinner" /> Local AI is writing a description… you can start typing.
         </p>
       )}
-      <label>
-        Name
-        <input value={v.name} onChange={set("name")} placeholder="e.g. Rhododendron tee" autoFocus />
-      </label>
+      <div className="name-size">
+        <label>
+          Name
+          <input value={v.name} onChange={set("name")} placeholder="e.g. Rhododendron tee" autoFocus />
+        </label>
+        <label>
+          Size
+          <input value={v.size} onChange={set("size")} placeholder="M, 8 oz…" />
+        </label>
+      </div>
       <div className="row3">
         <label>
           Price $
@@ -122,16 +158,10 @@ export function ItemForm({
         Description
         <textarea value={v.description} onChange={set("description")} rows={3} />
       </label>
-      <div className="row2">
-        <label>
-          Category
-          <input value={v.category} onChange={set("category")} placeholder="T-shirt" />
-        </label>
-        <label>
-          Size
-          <input value={v.size} onChange={set("size")} placeholder="M" />
-        </label>
-      </div>
+      <label>
+        Category
+        <input value={v.category} onChange={set("category")} placeholder="T-shirt" />
+      </label>
       <button type="button" className="link" onClick={() => setMore(!more)}>
         {more ? "Fewer details" : "More details (tags, colour, barcode, SKU)"}
       </button>
@@ -162,6 +192,23 @@ export function ItemForm({
             </label>
           </div>
         </>
+      )}
+      {sameSize && (
+        <div className="notice warn">
+          You already have <strong>{sameSize.name}</strong> in size <strong>{sameSize.size}</strong> (
+          {sameSize.quantity} in stock).
+          {onAddStock && (
+            <button type="button" className="btn btn-primary" onClick={() => onAddStock(sameSize)}>
+              Add 1 to that item instead
+            </button>
+          )}
+        </div>
+      )}
+      {!sameSize && otherSizes.length > 0 && (
+        <div className="notice">
+          Also in stock: {otherSizes.map((i) => `${i.size} (${i.quantity})`).join(", ")}.{" "}
+          {v.size.trim() ? `This will be saved as size ${v.size.trim()}.` : "Add a size so this is saved as a separate size."}
+        </div>
       )}
       {error && <p className="error">{error}</p>}
       <div className="actions">

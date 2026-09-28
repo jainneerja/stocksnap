@@ -137,6 +137,37 @@ def test_describe_returns_ai_draft(client):
     assert draft["category"] == "T-shirt" and "floral" in draft["tags"]
 
 
+def test_describe_reads_size_and_price_from_tag_photo(client):
+    product = upload(client, photo())
+    r = client.post("/api/photos", files={"file": ("tag.jpg", photo((250, 250, 250), "rect"), "image/jpeg")})
+    assert r.status_code == 200
+    tag = r.json()["image_path"]
+
+    draft = client.post(
+        "/api/describe", json={"image_path": product["image_path"], "tag_image_path": tag}
+    ).json()
+    assert draft["size"] == "M" and draft["price_cents"] == 2800
+    assert client.vision.calls[-1] == 2  # product + tag sent together
+
+    no_tag = client.post("/api/describe", json={"image_path": product["image_path"]}).json()
+    assert no_tag["size"] == "" and no_tag["price_cents"] is None
+    assert client.vision.calls[-1] == 1
+
+
+def test_same_name_same_size_is_a_duplicate(client):
+    m = new_item(client, name="Rhododendron Tee", category="T-shirt", size="M")
+    assert m["sku"].endswith("-M")
+    r = client.post("/api/items", json={"name": " rhododendron tee ", "size": "m"})
+    assert r.status_code == 409 and "Add stock" in r.json()["detail"]
+
+    large = new_item(client, name="Rhododendron Tee", category="T-shirt", size="L")  # new size is fine
+    assert large["sku"] == f"TSH-{large['id']:05d}-L"
+    assert client.patch(f"/api/items/{large['id']}", json={"size": "M"}).status_code == 409
+    # unsized items with the same name are allowed (e.g. two different "Candle"s)
+    new_item(client, name="Candle")
+    new_item(client, name="Candle")
+
+
 def test_describe_fails_gracefully(make_client):
     c = make_client(vision_fails=True)
     res = upload(c, photo())
@@ -157,6 +188,11 @@ def test_parse_draft_tolerates_messy_model_output():
     d = parse_draft('Sure! {"name": "Blue Mug", "tags": "Coffee, Ceramic", "color": ["blue","white"]}')
     assert d.name == "Blue Mug" and d.tags == ["coffee", "ceramic"] and d.color == "blue, white"
     assert parse_draft("no json here").name == ""
+    d = parse_draft('{"name": "Tee", "size": "Size: XL", "price": "$24.50"}')
+    assert d.size == "XL" and d.price_cents == 2450
+    d = parse_draft('{"name": "Candle", "size": "none", "price": ""}')
+    assert d.size == "" and d.price_cents is None
+    assert parse_draft('{"size": "8 oz", "price": 18}').price_cents == 1800
 
 
 # ------------------------------------------------------------------- system

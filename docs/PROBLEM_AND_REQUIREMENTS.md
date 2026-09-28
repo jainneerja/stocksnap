@@ -30,6 +30,8 @@ A solo maker who sells tees, candles, jewellery and similar goods at markets and
 | F2 | Read barcodes offline (UPC/EAN/Code128/QR, …) and match them to an existing item's barcode or SKU | ✅ |
 | F3 | Visual "which of my items is this?" match against your own catalogue | ✅ CLIP or lite |
 | F4 | Local vision-language model drafts name, category, description, colour, material and tags | ✅ Ollama |
+| F4a | Optional close-up of a label or hang tag; the model reads the **size and price** exactly as printed | ✅ |
+| F4b | Same product in a new size: copy details from the existing item and only change size and stock. Block duplicate name + size, and offer to add stock instead | ✅ |
 | F5 | Create and edit items: SKU (auto-generated), price, cost, quantity, size, colour, photo | ✅ |
 | F6 | Adjust stock (restock, breakage) and flag low stock | ✅ |
 | F7 | Log a sale in one tap, reduce stock, prevent overselling, undo | ✅ |

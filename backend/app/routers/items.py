@@ -21,11 +21,21 @@ def _sku_prefix(item: Item) -> str:
     return (base[:3] or "ITM").ljust(3, "X")
 
 
+def _auto_sku(item: Item) -> str:
+    """TSH-00012, or TSH-00012-M / CAN-00003-8OZ when the item has a size."""
+    size = re.sub(r"[^A-Za-z0-9]", "", item.size or "").upper()[:6]
+    return f"{_sku_prefix(item)}-{item.id:05d}" + (f"-{size}" if size else "")
+
+
 def _get(session: Session, item_id: int) -> Item:
     item = session.get(Item, item_id)
     if not item:
         raise HTTPException(404, "Item not found")
     return item
+
+
+def _norm(text: str) -> str:
+    return re.sub(r"\s+", " ", (text or "").strip()).lower()
 
 
 def _check_unique(session: Session, item: Item) -> None:
@@ -39,6 +49,21 @@ def _check_unique(session: Session, item: Item) -> None:
         ).first()
         if clash:
             raise HTTPException(409, f"Barcode {item.barcode} is already on '{clash.name}'")
+    if item.size.strip():
+        # Same product in the same size should be a restock, not a second item.
+        same = session.exec(
+            select(Item).where(
+                func.lower(func.trim(Item.name)) == _norm(item.name),
+                func.lower(func.trim(Item.size)) == _norm(item.size),
+                Item.id != item.id,
+            )
+        ).first()
+        if same:
+            raise HTTPException(
+                409,
+                f"You already have '{same.name}' in size {same.size} ({same.quantity} in stock). "
+                "Add stock to it instead.",
+            )
 
 
 def _index_image(request: Request, item: Item) -> None:
@@ -101,12 +126,13 @@ def create_item(data: ItemCreate, request: Request, session: Session = Depends(g
     item = Item.model_validate(data.model_dump(exclude={"sku"}))
     item.sku = (data.sku or "").strip().upper()
     item.barcode = (item.barcode or "").strip() or None
+    item.size = (item.size or "").strip()
     _check_unique(session, item)
     _index_image(request, item)
     session.add(item)
     session.flush()  # assigns id
     if not item.sku:
-        item.sku = f"{_sku_prefix(item)}-{item.id:05d}"
+        item.sku = _auto_sku(item)
     session.commit()
     session.refresh(item)
     return item
@@ -122,9 +148,10 @@ def update_item(
     for key, val in changes.items():
         setattr(item, key, val)
     if "sku" in changes:
-        item.sku = (item.sku or "").strip().upper() or f"{_sku_prefix(item)}-{item.id:05d}"
+        item.sku = (item.sku or "").strip().upper() or _auto_sku(item)
     if "barcode" in changes:
         item.barcode = (item.barcode or "").strip() or None
+    item.size = (item.size or "").strip()
     _check_unique(session, item)
     if image_changed:
         _index_image(request, item)

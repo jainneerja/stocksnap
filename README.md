@@ -2,13 +2,15 @@
 
 **Offline, open-source inventory and bookkeeping for makers and micro-retailers, with local AI.**
 
-Snap a photo of an item. StockSnap reads any barcode, recognises items you already stock, and uses a local vision-language model to draft the name, description and tags. Selling takes one tap, stock updates on its own, and the Money tab shows what you earned this month. It all runs on your laptop, so no subscription is needed and none of your data leaves your device.
+Snap a photo of an item, plus an optional close-up of its size or price tag. StockSnap reads any barcode, recognises items you already stock, and uses a local vision-language model to draft the name, description and tags. It also reads the **size and price straight off the tag**, so items with no barcode still get listed without typing. Selling takes one tap, stock updates on its own, and the Money tab shows what you earned this month. It all runs on your laptop, so no subscription is needed and none of your data leaves your device.
 
 ![StockSnap screens](docs/screenshots.png)
 
+![Reading size and price from a tag](docs/screenshots-sizes.png)
+
 | Add stock | Sell | Inventory | Money |
 |---|---|---|---|
-| Photo → barcode → "do I already have this?" → AI-drafted listing | Tap a tile or snap a photo to sell; undo mistakes | Search, low-stock flags, ± stepper, CSV export | Sales, cost of goods, expenses, profit; CSV + print to PDF; full backup |
+| Photo (+ tag close-up) → barcode → "do I already have this?" → AI-drafted listing with size & price | Tap a tile or snap a photo to sell; undo mistakes | Search, low-stock flags, ± stepper, CSV export | Sales, cost of goods, expenses, profit; CSV + print to PDF; full backup |
 
 ## Why
 
@@ -20,7 +22,7 @@ See [docs/PROBLEM_AND_REQUIREMENTS.md](docs/PROBLEM_AND_REQUIREMENTS.md) for the
 
 | Job | Model / library | Licence | Runs |
 |---|---|---|---|
-| Draft name, description, tags from a photo | **Qwen2.5-VL 3B** via [Ollama](https://ollama.com) (or `moondream` for low-end laptops) | Apache-2.0 | Local, CPU or GPU |
+| Draft name, description, tags from a photo; read size & price from a tag | **Qwen2.5-VL 3B** via [Ollama](https://ollama.com) (or `moondream` for low-end laptops) | Apache-2.0 | Local, CPU or GPU |
 | "Which of my items is this?" | **OpenCLIP ViT-B/32** (optional) or the built-in lite colour/shape matcher | MIT | Local |
 | Barcodes (UPC, EAN, Code128, QR, …) | **zxing-cpp** | Apache-2.0 | Local |
 | Storage | SQLite | Public domain | Local file |
@@ -105,7 +107,8 @@ docs/                  problem & requirements, architecture
 ## Roadmap
 
 - [ ] Printable SKU barcode labels
-- [ ] Item variants (size/colour matrix) under one parent product
+- [x] Sizes: read from tag, "different size" of an existing product, duplicate-size guard
+- [ ] Full variant matrix (size × colour) under one parent product
 - [ ] CSV import from Etsy / Square / Shopify exports
 - [ ] Optional sync (local-first, e.g. CRDT or self-hosted)
 - [ ] Packaged desktop installer (Tauri or PyInstaller)

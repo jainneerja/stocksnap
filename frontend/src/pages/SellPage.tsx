@@ -83,7 +83,10 @@ export function SellPage({ toast }: { toast: (msg: string) => void }) {
         {shown.map((it) => (
           <button key={it.id} className="tile" disabled={it.quantity <= 0} onClick={() => sell(it)}>
             {it.image_path ? <img src={imageUrl(it.image_path)} alt="" /> : <div className="tile-ph">{it.name[0]}</div>}
-            <span className="tile-name">{it.name}</span>
+            <span className="tile-name">
+              {it.name}
+              {it.size && <span className="size-chip">{it.size}</span>}
+            </span>
             <span className="tile-meta">
               {money(it.price_cents)} · {it.quantity > 0 ? `${it.quantity} left` : "sold out"}
             </span>

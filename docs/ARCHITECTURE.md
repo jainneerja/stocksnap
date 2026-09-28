@@ -25,6 +25,8 @@
 
 **Scan is split into two calls.** `/api/scan` saves the photo, reads the barcode and runs similarity search, all in well under a second. `/api/describe` runs the vision-language model, which can take 5–30 s on a CPU. The UI shows the form straight away, and when the AI draft arrives it fills only the fields the user hasn't typed in yet. The seller is never left waiting on AI.
 
+**Tag close-ups for size and price.** Handmade goods rarely have barcodes, but they usually have a size label or hang tag. `/api/photos` saves a sharper close-up (1600 px so small print survives), and `/api/describe` sends it to the vision model as a second image, asking it to copy size and price exactly as printed and never guess. Items are matched by name + size: a new size is a separate item with a SKU like `TSH-00012-L`, and saving the same name + size again returns 409 with an "add stock instead" prompt.
+
 **Local-first AI behind small interfaces.** `OllamaVision` and `Embedder` are the only places that touch models. You can swap the model with an environment variable, and tests inject fakes. Ollama was chosen because it installs with one click on Windows, Mac and Linux, handles GPU and CPU automatically, and hosts many open vision models.
 
 **Re-identification over generic detection.** Generic detectors such as YOLO or COCO know "cup" and "person", but they can't tell your lavender candle apart from your cedar candle. Embedding each saved item's photo and comparing new photos against *your own catalogue* is what makes "snap to sell" and "snap to restock" work.
