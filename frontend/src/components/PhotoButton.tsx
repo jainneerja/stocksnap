@@ -10,11 +10,14 @@ export function PhotoButton({
   onPhoto,
   disabled,
   variant = "primary",
+  multiple = false,
 }: {
   label: string;
   onPhoto: (file: File) => void;
   disabled?: boolean;
   variant?: "primary" | "secondary";
+  /** Allow picking several photos from the gallery (each is passed to onPhoto in turn). */
+  multiple?: boolean;
 }) {
   const input = useRef<HTMLInputElement>(null);
   return (
@@ -31,11 +34,11 @@ export function PhotoButton({
         ref={input}
         type="file"
         accept="image/*"
-        capture="environment"
+        capture={multiple ? undefined : "environment"}
+        multiple={multiple}
         hidden
         onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) onPhoto(f);
+          Array.from(e.target.files ?? []).forEach((f) => onPhoto(f));
           e.target.value = "";
         }}
       />

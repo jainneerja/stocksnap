@@ -16,6 +16,10 @@ So sellers end up with inaccurate stock counts, missed sales, messy books and a 
 
 Open-source inventory tools (InvenTree, ERPNext) and bookkeeping tools (GnuCash, Akaunting) do exist. They're powerful, but they're built for warehouses and accountants. StockSnap's difference is the combination of **photo-first capture with local AI**, **offline operation** and **simplicity aimed at micro-sellers**.
 
+## Customer feedback that shaped v0.3
+
+Sellers in a local makers' community said they already try AI for photos and categories, but bulk lots break it. Machine-made jewellery arrives **500 pieces at a time, almost every design different**. That led to bulk add with tray photos, per-batch questions for what AI can't verify (metal), and the same flow generalised to soaps and other packaged goods, where the AI reads the label.
+
 ## Primary user
 
 A solo maker who sells tees, candles, jewellery and similar goods at markets and online, has 20 to 1,000 SKUs, and is not an accountant.
@@ -32,11 +36,16 @@ A solo maker who sells tees, candles, jewellery and similar goods at markets and
 | F4 | Local vision-language model drafts name, category, description, colour, material and tags | ✅ Ollama |
 | F4a | Optional close-up of a label or hang tag; the model reads the **size and price** exactly as printed | ✅ |
 | F4b | Same product in a new size: copy details from the existing item and only change size and stock. Block duplicate name + size, and offer to add stock instead | ✅ |
+| F4c | **Bulk add**: find and count every item on a tray photo, number them and give each a unique SKU | ✅ |
+| F4d | Per-batch questions for facts the camera can't see (metal, stones, wax, cost, price), applied to every item | ✅ |
+| F4e | Identical goods grouped and counted, label text read by AI, existing products restocked rather than duplicated | ✅ |
+| F4f | Printable barcode tags in tray order | ✅ |
 | F5 | Create and edit items: SKU (auto-generated), price, cost, quantity, size, colour, photo | ✅ |
 | F6 | Adjust stock (restock, breakage) and flag low stock | ✅ |
 | F7 | Log a sale in one tap, reduce stock, prevent overselling, undo | ✅ |
 | F8 | Log expenses by category | ✅ |
 | F9 | Monthly report: revenue, cost of goods sold, gross profit, expenses, net profit, best sellers, stock value | ✅ |
+| F9a | **Stock by month**: opening, added, sold, adjusted and closing units per item, plus value at cost; every stock change is recorded in a ledger | ✅ |
 | F10 | Export CSV (inventory, sales, expenses, summary), print to PDF, full backup zip | ✅ |
 
 ### Non-functional

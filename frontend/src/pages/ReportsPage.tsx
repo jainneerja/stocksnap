@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, type Expense, type Summary } from "../api";
+import { api, stockMonth, type Expense, type StockMonth, type Summary } from "../api";
 import { isoDate, money, monthRange, toCents } from "../format";
 
 const CATEGORIES = ["Materials", "Packaging", "Shipping", "Booth / market fees", "Marketing", "Equipment", "Other"];
@@ -11,6 +11,7 @@ export function ReportsPage({ toast }: { toast: (msg: string) => void }) {
   const [start, end] = monthRange(year, month - 1);
 
   const [s, setS] = useState<Summary | null>(null);
+  const [stock, setStock] = useState<StockMonth | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [exp, setExp] = useState({ category: CATEGORIES[0], description: "", amount: "", spent_on: isoDate() });
 
@@ -20,10 +21,11 @@ export function ReportsPage({ toast }: { toast: (msg: string) => void }) {
       setExpenses([]);
       return;
     }
-    const [sum, ex] = await Promise.all([api.summary(start, end), api.expenses(start, end)]);
+    const [sum, ex, st] = await Promise.all([api.summary(start, end), api.expenses(start, end), stockMonth(ym)]);
     setS(sum);
     setExpenses(ex);
-  }, [start, end]);
+    setStock(st);
+  }, [start, end, ym]);
 
   useEffect(() => {
     load().catch((e) => toast(e.message));
@@ -70,6 +72,8 @@ export function ReportsPage({ toast }: { toast: (msg: string) => void }) {
         </>
       )}
 
+      {stock && <StockTable stock={stock} />}
+
       <h2>Expenses</h2>
       <form className="expense-form no-print" onSubmit={addExpense}>
         <select value={exp.category} onChange={(e) => setExp({ ...exp, category: e.target.value })}>
@@ -99,6 +103,7 @@ export function ReportsPage({ toast }: { toast: (msg: string) => void }) {
         <a className="btn btn-secondary" href={api.exportUrl("summary", start, end)}>Summary CSV</a>
         <a className="btn btn-secondary" href={api.exportUrl("sales", start, end)}>Sales CSV</a>
         <a className="btn btn-secondary" href={api.exportUrl("expenses", start, end)}>Expenses CSV</a>
+        <a className="btn btn-secondary" href={`/api/reports/stock.csv?month=${ym}`}>Stock CSV</a>
         <a className="btn btn-secondary" href="/api/backup">Full backup (.zip)</a>
       </div>
       <p className="muted small">
@@ -115,5 +120,58 @@ function Stat({ label, value, sub, tone }: { label: string; value: string; sub?:
       <span className="stat-value">{value}</span>
       {sub && <span className="stat-sub">{sub}</span>}
     </div>
+  );
+}
+
+function StockTable({ stock }: { stock: StockMonth }) {
+  const [all, setAll] = useState(false);
+  const rows = all ? stock.rows : stock.rows.slice(0, 12);
+  const t = stock.totals;
+  return (
+    <>
+      <h2>Stock this month</h2>
+      <div className="stats">
+        <Stat label="Start of month" value={String(t.opening ?? 0)} sub="units" />
+        <Stat label="Added" value={`+${t.added ?? 0}`} />
+        <Stat label="Sold" value={`−${t.sold ?? 0}`} />
+        <Stat label="End of month" value={String(t.closing ?? 0)} sub={`${money(t.closing_value_cents ?? 0)} at cost`} />
+      </div>
+      {t.adjusted ? <p className="muted small">Manual corrections: {t.adjusted > 0 ? "+" : ""}{t.adjusted} units.</p> : null}
+      <div className="table-wrap">
+        <table className="stock">
+          <thead>
+            <tr>
+              <th>Item</th><th>Start</th><th>Added</th><th>Sold</th><th>Adj.</th><th>End</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.item_id}>
+                <td>
+                  {r.name}
+                  {r.size && <span className="size-chip">{r.size}</span>}
+                  <div className="muted small">{r.sku}</div>
+                </td>
+                <td>{r.opening}</td>
+                <td>{r.added ? `+${r.added}` : ""}</td>
+                <td>{r.sold ? `−${r.sold}` : ""}</td>
+                <td>{r.adjusted ? (r.adjusted > 0 ? `+${r.adjusted}` : `−${-r.adjusted}`) : ""}</td>
+                <td><strong>{r.closing}</strong></td>
+              </tr>
+            ))}
+            {!rows.length && (
+              <tr>
+                <td colSpan={6} className="muted">No stock this month.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      {stock.rows.length > 12 && (
+        <button className="link no-print" onClick={() => setAll(!all)}>
+          {all ? "Show fewer" : `Show all ${stock.rows.length} items`}
+        </button>
+      )}
+    </>
   );
 }

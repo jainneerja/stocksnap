@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type Health } from "./api";
+import { BulkPage } from "./pages/BulkPage";
 import { InventoryPage } from "./pages/InventoryPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { ScanPage } from "./pages/ScanPage";
 import { SellPage } from "./pages/SellPage";
 
 const TABS = [
-  { id: "scan", label: "Add stock" },
+  { id: "scan", label: "Add" },
+  { id: "bulk", label: "Bulk" },
   { id: "sell", label: "Sell" },
   { id: "inventory", label: "Inventory" },
   { id: "reports", label: "Money" },
@@ -60,6 +62,7 @@ export function App() {
 
       <main>
         {tab === "scan" && <ScanPage toast={toast} />}
+        {tab === "bulk" && <BulkPage toast={toast} aiReady={!!ai?.available} />}
         {tab === "sell" && <SellPage toast={toast} />}
         {tab === "inventory" && <InventoryPage toast={toast} />}
         {tab === "reports" && <ReportsPage toast={toast} />}

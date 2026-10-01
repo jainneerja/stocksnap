@@ -8,6 +8,7 @@ from sqlmodel import Session, select
 
 from ..db import get_session
 from ..models import Expense, ExpenseCreate, Item, Sale, SaleCreate, local_today, utcnow
+from ..services import ledger
 
 router = APIRouter(prefix="/api", tags=["sales & expenses"])
 
@@ -44,9 +45,9 @@ def create_sale(data: SaleCreate, session: Session = Depends(get_session)):
         note=data.note,
         sold_at=data.sold_at or utcnow(),
     )
-    item.quantity -= data.quantity
-    item.updated_at = utcnow()
     session.add(sale)
+    session.flush()
+    ledger.move(session, item, -data.quantity, "sale", sale_id=sale.id)
     session.commit()  # sale + stock change in one transaction
     session.refresh(sale)
     return sale
@@ -69,8 +70,7 @@ def void_sale(sale_id: int, session: Session = Depends(get_session)):
         raise HTTPException(404, "Sale not found")
     item = session.get(Item, sale.item_id)
     if item:
-        item.quantity += sale.quantity
-        item.updated_at = utcnow()
+        ledger.move(session, item, sale.quantity, "void", sale_id=sale.id, note="sale undone")
     session.delete(sale)
     session.commit()
 

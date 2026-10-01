@@ -10,7 +10,8 @@ from sqlalchemy import func, or_
 from sqlmodel import Session, select
 
 from ..db import get_session
-from ..models import Item, ItemCreate, ItemRead, ItemUpdate, Sale, StockAdjust, utcnow
+from ..models import Item, ItemCreate, ItemRead, ItemUpdate, Sale, StockAdjust, StockMove, utcnow
+from ..services import ledger
 from ..services.images import load_image, resolve_image
 
 router = APIRouter(prefix="/api/items", tags=["items"])
@@ -116,6 +117,18 @@ def export_items(session: Session = Depends(get_session)):
     )
 
 
+@router.get("/{item_id}/barcode.svg", include_in_schema=False)
+def barcode_svg(item_id: int, session: Session = Depends(get_session)):
+    """Code 128 barcode of the SKU, for printing price tags."""
+    import zxingcpp
+    from fastapi.responses import Response
+
+    item = _get(session, item_id)
+    code = zxingcpp.create_barcode(item.sku, zxingcpp.BarcodeFormat.Code128)
+    return Response(zxingcpp.write_barcode_to_svg(code, scale=2), media_type="image/svg+xml",
+                    headers={"Cache-Control": "max-age=3600"})
+
+
 @router.get("/{item_id}", response_model=ItemRead)
 def get_item(item_id: int, session: Session = Depends(get_session)):
     return _get(session, item_id)
@@ -123,7 +136,8 @@ def get_item(item_id: int, session: Session = Depends(get_session)):
 
 @router.post("", response_model=ItemRead, status_code=201)
 def create_item(data: ItemCreate, request: Request, session: Session = Depends(get_session)):
-    item = Item.model_validate(data.model_dump(exclude={"sku"}))
+    item = Item.model_validate(data.model_dump(exclude={"sku", "quantity"}))
+    item.quantity = 0  # opening stock goes through the ledger below
     item.sku = (data.sku or "").strip().upper()
     item.barcode = (item.barcode or "").strip() or None
     item.size = (item.size or "").strip()
@@ -133,6 +147,7 @@ def create_item(data: ItemCreate, request: Request, session: Session = Depends(g
     session.flush()  # assigns id
     if not item.sku:
         item.sku = _auto_sku(item)
+    ledger.move(session, item, data.quantity, "initial")
     session.commit()
     session.refresh(item)
     return item
@@ -144,6 +159,7 @@ def update_item(
 ):
     item = _get(session, item_id)
     changes = data.model_dump(exclude_unset=True)
+    new_qty = changes.pop("quantity", None)
     image_changed = "image_path" in changes and changes["image_path"] != item.image_path
     for key, val in changes.items():
         setattr(item, key, val)
@@ -155,6 +171,8 @@ def update_item(
     _check_unique(session, item)
     if image_changed:
         _index_image(request, item)
+    if new_qty is not None:
+        ledger.move(session, item, new_qty - item.quantity, "adjust", note="count edited")
     item.updated_at = utcnow()
     session.commit()
     session.refresh(item)
@@ -164,8 +182,7 @@ def update_item(
 @router.post("/{item_id}/adjust", response_model=ItemRead)
 def adjust_stock(item_id: int, data: StockAdjust, session: Session = Depends(get_session)):
     item = _get(session, item_id)
-    item.quantity += data.delta
-    item.updated_at = utcnow()
+    ledger.move(session, item, data.delta, "adjust")
     session.commit()
     session.refresh(item)
     return item
@@ -179,5 +196,7 @@ def delete_item(item_id: int, session: Session = Depends(get_session)):
         raise HTTPException(
             409, "This item has sales history, so it can't be deleted. Set its stock to 0 instead."
         )
+    for mv in session.exec(select(StockMove).where(StockMove.item_id == item_id)).all():
+        session.delete(mv)
     session.delete(item)
     session.commit()

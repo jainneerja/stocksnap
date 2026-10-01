@@ -7,16 +7,16 @@ from __future__ import annotations
 import csv
 import io
 from collections import defaultdict
-from datetime import date
+from datetime import date, datetime, time
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from ..db import get_session
-from ..models import Expense, Item, Sale
+from ..models import Expense, Item, Sale, StockMove
 from .sales import day_range
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
@@ -144,4 +144,101 @@ def export_csv(
         iter([buf.getvalue()]),
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename={fname}"},
+    )
+
+
+# ------------------------------------------------------------ monthly stock
+
+
+class StockRow(BaseModel):
+    item_id: int
+    sku: str
+    name: str
+    size: str
+    opening: int
+    added: int  # new stock: initial + bulk/scan intake
+    sold: int  # net of undone sales
+    adjusted: int  # manual corrections (+ or -)
+    closing: int
+    unit_cost_cents: int
+    closing_value_cents: int
+
+
+class StockMonth(BaseModel):
+    month: str  # YYYY-MM
+    rows: list[StockRow]
+    totals: dict[str, int]
+
+
+def _month_bounds(month: Optional[str]) -> tuple[str, datetime, datetime]:
+    from .sales import local_today
+
+    if month:
+        try:
+            y, m = (int(x) for x in month.split("-"))
+            first = date(y, m, 1)
+        except ValueError:
+            raise HTTPException(400, "month must look like 2026-10")
+    else:
+        first = local_today().replace(day=1)
+    nxt = date(first.year + (first.month == 12), first.month % 12 + 1, 1)
+    lo = datetime.combine(first, time.min).astimezone()
+    hi = datetime.combine(nxt, time.min).astimezone()
+    return first.strftime("%Y-%m"), lo, hi
+
+
+@router.get("/stock", response_model=StockMonth)
+def stock_by_month(month: Optional[str] = None, session: Session = Depends(get_session)):
+    """Opening, added, sold, adjusted and closing stock for every item in a month."""
+    label, lo, hi = _month_bounds(month)
+    moves = session.exec(select(StockMove).where(StockMove.created_at < hi)).all()
+    items = {i.id: i for i in session.exec(select(Item)).all()}
+
+    acc: dict[int, dict[str, int]] = defaultdict(lambda: dict(opening=0, added=0, sold=0, adjusted=0))
+    for mv in moves:
+        a = acc[mv.item_id]
+        if mv.created_at < lo:
+            a["opening"] += mv.delta
+        elif mv.reason in ("initial", "intake"):
+            a["added"] += mv.delta
+        elif mv.reason in ("sale", "void"):
+            a["sold"] -= mv.delta
+        else:
+            a["adjusted"] += mv.delta
+
+    rows = []
+    for item_id, a in acc.items():
+        it = items.get(item_id)
+        if it is None:
+            continue
+        closing = a["opening"] + a["added"] - a["sold"] + a["adjusted"]
+        if not any(a.values()) and not closing:
+            continue
+        rows.append(StockRow(
+            item_id=item_id, sku=it.sku, name=it.name, size=it.size, closing=closing,
+            unit_cost_cents=it.cost_cents, closing_value_cents=max(closing, 0) * it.cost_cents, **a,
+        ))
+    rows.sort(key=lambda r: r.sku)
+    totals = {k: sum(getattr(r, k) for r in rows)
+              for k in ("opening", "added", "sold", "adjusted", "closing", "closing_value_cents")}
+    return StockMonth(month=label, rows=rows, totals=totals)
+
+
+@router.get("/stock.csv")
+def stock_csv(month: Optional[str] = None, session: Session = Depends(get_session)):
+    rep = stock_by_month(month, session)
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["sku", "item", "size", "opening", "added", "sold", "adjusted", "closing",
+                "unit_cost", "closing_value"])
+    for r in rep.rows:
+        w.writerow([r.sku, r.name, r.size, r.opening, r.added, r.sold, r.adjusted, r.closing,
+                    _money(r.unit_cost_cents), _money(r.closing_value_cents)])
+    t = rep.totals
+    w.writerow(["TOTAL", "", "", t["opening"], t["added"], t["sold"], t["adjusted"], t["closing"],
+                "", _money(t["closing_value_cents"])])
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=stocksnap-stock-{rep.month}.csv"},
     )

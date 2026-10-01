@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from . import __version__
 from .config import Settings
 from .db import make_engine
-from .routers import items, reports, sales, scan, system
+from .routers import batches, items, reports, sales, scan, system
 from .services.ai import AI
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -41,7 +41,7 @@ def create_app(settings: Optional[Settings] = None, ai: Optional[AI] = None) -> 
         allow_headers=["*"],
     )
 
-    for r in (items, scan, sales, reports, system):
+    for r in (items, scan, batches, sales, reports, system):
         app.include_router(r.router)
 
     app.mount("/images", StaticFiles(directory=settings.images_dir), name="images")

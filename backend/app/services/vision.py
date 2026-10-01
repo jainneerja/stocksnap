@@ -152,11 +152,12 @@ class OllamaVision:
                 "detail": "Ollama is not running (install from ollama.com, then `ollama serve`)",
             }
 
-    def describe(self, images: list[Image.Image]) -> Draft:
-        """images[0] = product photo; optional images[1] = label/tag close-up."""
+    def describe(self, images: list[Image.Image], hint: str = "") -> Draft:
+        """images[0] = product photo; optional images[1] = label/tag close-up.
+        `hint` adds product-specific guidance (e.g. from a bulk-intake preset)."""
         payload = {
             "model": self.model,
-            "prompt": PROMPT,
+            "prompt": PROMPT + (f"\n\nAbout this product: {hint}" if hint else ""),
             # Tag close-ups keep more pixels so small print stays readable.
             "images": [_to_b64_jpeg(im, 768 if i == 0 else 1024) for i, im in enumerate(images)],
             "format": "json",

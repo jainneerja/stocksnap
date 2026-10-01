@@ -158,3 +158,135 @@ export const api = {
 };
 
 export const imageUrl = (p: string | null) => (p ? `/images/${p}` : "");
+
+// ------------------------------------------------------------ bulk intake
+
+export interface Question {
+  key: string;
+  label: string;
+  kind: "select" | "text" | "money";
+  options: string[];
+  field: string | null;
+  help: string;
+}
+
+export interface Preset {
+  key: string;
+  label: string;
+  mode: "unique" | "identical";
+  background: string;
+  tips: string[];
+  questions: Question[];
+  ai_hint: string;
+  per_photo: string;
+}
+
+export interface Detection {
+  id: number;
+  number: number;
+  bbox: [number, number, number, number];
+  include: boolean;
+  group_id: number;
+}
+
+export interface BatchPhoto {
+  id: number;
+  image_path: string;
+  width: number;
+  height: number;
+  detections: Detection[];
+}
+
+export interface ItemRef {
+  id: number;
+  sku: string;
+  name: string;
+  size: string;
+  quantity: number;
+  price_cents: number;
+}
+
+export interface Group {
+  id: number;
+  status: "pending" | "done" | "failed";
+  name: string;
+  description: string;
+  category: string;
+  tags: string;
+  color: string;
+  size: string;
+  material: string;
+  cost_cents: number;
+  price_cents: number;
+  include: boolean;
+  count: number;
+  count_override: number | null;
+  numbers: number[];
+  crops: string[];
+  existing_item: ItemRef | null;
+  item: ItemRef | null;
+}
+
+export interface Batch {
+  id: number;
+  preset: string;
+  preset_label: string;
+  mode: "unique" | "identical";
+  answers: Record<string, string>;
+  status: "capturing" | "describing" | "review" | "saved";
+  describing: boolean;
+  created_at: string;
+  photos: BatchPhoto[];
+  groups: Group[];
+  progress: { pieces: number; groups: number; done: number; failed: number; units: number };
+  warning: string;
+}
+
+export type GroupUpdate = Partial<
+  Pick<Group, "name" | "description" | "category" | "tags" | "color" | "size" | "material" | "cost_cents" | "price_cents" | "count_override" | "include">
+> & { add_to_existing?: boolean };
+
+export interface StockRow {
+  item_id: number;
+  sku: string;
+  name: string;
+  size: string;
+  opening: number;
+  added: number;
+  sold: number;
+  adjusted: number;
+  closing: number;
+  unit_cost_cents: number;
+  closing_value_cents: number;
+}
+
+export interface StockMonth {
+  month: string;
+  rows: StockRow[];
+  totals: Record<string, number>;
+}
+
+export const bulk = {
+  presets: () => req<Preset[]>("/api/presets"),
+  open: () => req<Batch[]>("/api/batches"),
+  create: (preset: string, answers: Record<string, string>) =>
+    req<Batch>("/api/batches", json("POST", { preset, answers })),
+  get: (id: number) => req<Batch>(`/api/batches/${id}`),
+  addPhoto: (id: number, file: Blob) => {
+    const fd = new FormData();
+    fd.append("file", file, "tray.jpg");
+    return req<Batch>(`/api/batches/${id}/photos`, { method: "POST", body: fd });
+  },
+  toggle: (id: number, detId: number, include: boolean) =>
+    req<Batch>(`/api/batches/${id}/detections/${detId}`, json("PATCH", { include })),
+  describe: (id: number) => req<Batch>(`/api/batches/${id}/describe`, { method: "POST" }),
+  updateGroup: (id: number, groupId: number, data: GroupUpdate) =>
+    req<Batch>(`/api/batches/${id}/groups/${groupId}`, json("PATCH", data)),
+  bulkEdit: (id: number, data: { price_cents?: number; cost_cents?: number; category?: string }) =>
+    req<Batch>(`/api/batches/${id}/bulk-edit`, json("POST", data)),
+  save: (id: number) => req<Item[]>(`/api/batches/${id}/save`, { method: "POST" }),
+  discard: (id: number) => req<void>(`/api/batches/${id}`, { method: "DELETE" }),
+};
+
+export const stockMonth = (month: string) => req<StockMonth>(`/api/reports/stock?month=${month}`);
+export const barcodeUrl = (itemId: number) => `/api/items/${itemId}/barcode.svg`;

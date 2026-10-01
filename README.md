@@ -8,9 +8,28 @@ Snap a photo of an item, plus an optional close-up of its size or price tag. Sto
 
 ![Reading size and price from a tag](docs/screenshots-sizes.png)
 
-| Add stock | Sell | Inventory | Money |
-|---|---|---|---|
-| Photo (+ tag close-up) → barcode → "do I already have this?" → AI-drafted listing with size & price | Tap a tile or snap a photo to sell; undo mistakes | Search, low-stock flags, ± stepper, CSV export | Sales, cost of goods, expenses, profit; CSV + print to PDF; full backup |
+| Add | Bulk | Sell | Inventory | Money |
+|---|---|---|---|---|
+| Photo (+ tag close-up) → barcode → "do I already have this?" → AI-drafted listing with size & price | Hundreds of items from a few tray photos: counted, numbered, described, barcode tags printed | Tap a tile or snap a photo to sell; undo mistakes | Search, low-stock flags, ± stepper, CSV export | Profit, expenses, **stock by month** (start, added, sold, end); CSV + print to PDF; full backup |
+
+## Bulk add: 500 pieces from a few photos
+
+Wholesale lots arrive in bulk: a bag of 500 machine-made earrings, or a carton of soaps. Photographing them one at a time doesn't work, so StockSnap can take a whole tray at once.
+
+1. **Pick the product type.** Jewellery, soaps & bath, candles, or something else. Each comes with a **photo guide** (which background to use, how far apart to lay things out, how many per photo).
+2. **Answer a few questions once per batch.** These cover what the camera can't see: metal, stones, nickel-free, wax type, cost and price. The answers apply to every item in the batch, so the AI never has to guess a metal.
+3. **Photograph the trays.** StockSnap finds every item, draws a **numbered box** on each and counts them. Tap a box to drop anything that isn't an item.
+4. **Local AI describes them in the background.** It works out the type, colour, finish and style, and on packaged goods **reads the label** (name, scent, weight).
+5. **Review in one list,** set prices in bulk ("all earrings $22"), then **save**. Every item gets its own SKU and a **sheet of barcode tags** prints in tray order: tag #1 goes on piece #1.
+
+Two counting modes:
+
+- **One of a kind** (jewellery): every piece found becomes its own item and ID.
+- **Identical goods** (soaps, candles): look-alikes are grouped and counted, with one AI call per product rather than per bar. Groups whose labels read the same are merged, and a product you already stock is **restocked** instead of duplicated. For a full carton, type the count.
+
+![Bulk add](docs/screenshots-bulk.png)
+
+**Photo setup:** use a **matte black** background (velvet, felt, foam board) for gold, silver, pearls and bright items, and **plain white card** for dark items. Shoot in daylight with no flash, phone straight overhead, with a finger-width gap between items. Earring pairs should touch, so each pair counts as one.
 
 ## Why
 
@@ -24,7 +43,8 @@ See [docs/PROBLEM_AND_REQUIREMENTS.md](docs/PROBLEM_AND_REQUIREMENTS.md) for the
 |---|---|---|---|
 | Draft name, description, tags from a photo; read size & price from a tag | **Qwen2.5-VL 3B** via [Ollama](https://ollama.com) (or `moondream` for low-end laptops) | Apache-2.0 | Local, CPU or GPU |
 | "Which of my items is this?" | **OpenCLIP ViT-B/32** (optional) or the built-in lite colour/shape matcher | MIT | Local |
-| Barcodes (UPC, EAN, Code128, QR, …) | **zxing-cpp** | Apache-2.0 | Local |
+| Barcodes (UPC, EAN, Code128, QR, …) and printed SKU tags | **zxing-cpp** | Apache-2.0 | Local |
+| Finding and counting items on a tray photo | **OpenCV** | Apache-2.0 | Local, instant on CPU |
 | Storage | SQLite | Public domain | Local file |
 
 Every AI step is **optional and fails gracefully**. If Ollama isn't running, you type the details yourself and everything else still works.
@@ -106,7 +126,11 @@ docs/                  problem & requirements, architecture
 
 ## Roadmap
 
-- [ ] Printable SKU barcode labels
+- [x] Printable SKU barcode labels
+- [x] Bulk add from tray photos (jewellery, soaps, candles, other)
+- [x] Stock by month with a full stock ledger
+- [ ] Import supplier invoices / packing lists to fill in metal, cost and quantities
+- [ ] SAM 2 segmentation as an option for busy backgrounds
 - [x] Sizes: read from tag, "different size" of an existing product, duplicate-size guard
 - [ ] Full variant matrix (size × colour) under one parent product
 - [ ] CSV import from Etsy / Square / Shopify exports

@@ -37,6 +37,7 @@ class ItemBase(SQLModel):
     quantity: int = 0
     low_stock_threshold: int = Field(default=2, ge=0)
     image_path: Optional[str] = None
+    attributes: str = ""  # JSON object of extra facts, e.g. {"Metal": "Sterling silver"}
 
 
 class Item(ItemBase, table=True):
@@ -67,6 +68,7 @@ class ItemUpdate(SQLModel):
     quantity: Optional[int] = None
     low_stock_threshold: Optional[int] = Field(default=None, ge=0)
     image_path: Optional[str] = None
+    attributes: Optional[str] = None
 
 
 class ItemRead(ItemBase):
@@ -119,3 +121,80 @@ class Expense(ExpenseBase, table=True):
 
 class ExpenseCreate(ExpenseBase):
     pass
+
+
+# ------------------------------------------------------------ stock ledger
+
+
+class StockMove(SQLModel, table=True):
+    """Every change to stock, so any month can be reconstructed.
+
+    reason: initial | intake | sale | void | adjust
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    item_id: int = Field(foreign_key="item.id", index=True)
+    delta: int
+    reason: str = Field(index=True)
+    unit_cost_cents: int = 0
+    sale_id: Optional[int] = None
+    batch_id: Optional[int] = None
+    note: str = ""
+    created_at: datetime = Field(default_factory=utcnow, index=True)
+
+
+# ------------------------------------------------------------ bulk intake
+
+
+class Batch(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    preset: str
+    answers: str = "{}"  # JSON: batch-question answers applied to every piece
+    status: str = "capturing"  # capturing | describing | review | saved
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class BatchPhoto(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    batch_id: int = Field(foreign_key="batch.id", index=True)
+    image_path: str
+    width: int
+    height: int
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class Detection(SQLModel, table=True):
+    """One piece found on a tray photo."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    batch_id: int = Field(foreign_key="batch.id", index=True)
+    photo_id: int = Field(foreign_key="batchphoto.id", index=True)
+    number: int  # 1-based, matches the number drawn on the photo
+    bbox: str  # JSON [x, y, w, h] in photo pixels
+    crop_path: str
+    include: bool = True
+    group_id: int = 0  # identical goods share a group; unique mode = own group
+    embedding: Optional[str] = None
+
+
+class BatchGroup(SQLModel, table=True):
+    """What becomes one inventory item. In one-of-a-kind mode each piece is its
+    own group; in identical-goods mode look-alike pieces share a group."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    batch_id: int = Field(foreign_key="batch.id", index=True)
+    rep_detection_id: int  # the piece the AI looks at
+    status: str = "pending"  # pending | done | failed
+    name: str = ""
+    description: str = ""
+    category: str = ""
+    tags: str = ""
+    color: str = ""
+    size: str = ""
+    material: str = ""
+    cost_cents: int = 0
+    price_cents: int = 0
+    count_override: Optional[int] = None  # e.g. stacked soaps the camera can't count
+    include: bool = True
+    existing_item_id: Optional[int] = None  # same product already in inventory
+    item_id: Optional[int] = None  # set once saved
