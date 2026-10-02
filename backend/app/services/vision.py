@@ -162,6 +162,9 @@ class OllamaVision:
             "images": [_to_b64_jpeg(im, 768 if i == 0 else 1024) for i, im in enumerate(images)],
             "format": "json",
             "stream": False,
+            # Keep the model in memory between items: on a laptop CPU the first
+            # load alone can take a minute.
+            "keep_alive": "30m",
             "options": {"temperature": 0.2},
         }
         try:

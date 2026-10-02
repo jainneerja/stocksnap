@@ -104,7 +104,7 @@ All settings are environment variables with sensible defaults:
 | `STOCKSNAP_DATA_DIR` | `~/.stocksnap` | Database and photos |
 | `OLLAMA_URL` | `http://localhost:11434` | Local Ollama server |
 | `STOCKSNAP_VISION_MODEL` | `qwen2.5vl:3b` | Any Ollama vision model |
-| `STOCKSNAP_VISION_TIMEOUT` | `120` | Seconds to wait for the model |
+| `STOCKSNAP_VISION_TIMEOUT` | `300` | Seconds to wait for the model |
 | `STOCKSNAP_MATCHER` | `auto` | `auto` / `clip` / `lite` / `off` |
 | `STOCKSNAP_MATCH_THRESHOLD` | `0.80` | Minimum similarity to suggest a match |
 

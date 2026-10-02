@@ -24,7 +24,7 @@ class Settings:
         default_factory=lambda: os.environ.get("STOCKSNAP_VISION_MODEL", "qwen2.5vl:3b")
     )
     vision_timeout_s: float = field(
-        default_factory=lambda: float(os.environ.get("STOCKSNAP_VISION_TIMEOUT", "120"))
+        default_factory=lambda: float(os.environ.get("STOCKSNAP_VISION_TIMEOUT", "300"))
     )
 
     # "auto" = CLIP if installed, else the lightweight colour-histogram matcher.
