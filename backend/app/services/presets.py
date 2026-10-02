@@ -37,9 +37,50 @@ class Preset:
     questions: list[Question]
     ai_hint: str
     per_photo: str  # how many pieces fit one photo
+    categories: list[str] = field(default_factory=list)  # fixed list keeps inventory tidy
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+JEWELLERY_CATEGORIES = ["Earrings", "Rings", "Necklaces", "Bracelets", "Pendants", "Pins & Brooches",
+                        "Anklets", "Hair accessories", "Sets", "Other jewellery"]
+SOAP_CATEGORIES = ["Bar soap", "Liquid soap", "Bath bombs", "Body butter", "Gift sets", "Other bath"]
+CANDLE_CATEGORIES = ["Jar candles", "Tin candles", "Pillar candles", "Wax melts", "Other candles"]
+
+# Words a model (or a person) might use -> the category they belong to.
+SYNONYMS = {
+    "earring": "Earrings", "stud": "Earrings", "hoop": "Earrings", "huggie": "Earrings", "drop": "Earrings",
+    "ring": "Rings", "band": "Rings",
+    "necklace": "Necklaces", "chain": "Necklaces", "choker": "Necklaces", "lariat": "Necklaces",
+    "bracelet": "Bracelets", "bangle": "Bracelets", "cuff": "Bracelets",
+    "pendant": "Pendants", "charm": "Pendants", "locket": "Pendants",
+    "pin": "Pins & Brooches", "brooch": "Pins & Brooches",
+    "anklet": "Anklets",
+    "hair": "Hair accessories", "clip": "Hair accessories", "barrette": "Hair accessories",
+    "set": "Sets",
+    "bar soap": "Bar soap", "soap bar": "Bar soap", "liquid": "Liquid soap", "hand wash": "Liquid soap",
+    "bath bomb": "Bath bombs", "butter": "Body butter", "gift": "Gift sets",
+    "jar": "Jar candles", "tin": "Tin candles", "pillar": "Pillar candles", "melt": "Wax melts",
+}
+
+
+def normalize_category(raw: str, allowed: list[str]) -> str:
+    """Map whatever the AI said onto the preset's fixed list. Free text when no list."""
+    raw = (raw or "").strip()
+    if not allowed:
+        return raw
+    if not raw:
+        return allowed[-1]
+    low = raw.lower()
+    for c in allowed:
+        if c.lower() == low or c.lower().rstrip("s") == low.rstrip("s"):
+            return c
+    # longest synonym first so "bar soap" beats "bar"
+    for word in sorted(SYNONYMS, key=len, reverse=True):
+        if word in low and SYNONYMS[word] in allowed:
+            return SYNONYMS[word]
+    return allowed[-1]
 
 
 COMMON_TIPS = [
@@ -65,9 +106,10 @@ PRESETS: dict[str, Preset] = {
                 "Put one metal type per batch so the answers below apply to every piece.",
             ],
             per_photo="20-30 small pieces (studs, rings, charms) or about 6 necklaces",
+            categories=JEWELLERY_CATEGORIES,
             questions=[
                 Question("type", "What's on this tray?", "select",
-                         ["Mixed", "Earrings", "Rings", "Necklaces", "Bracelets", "Pendants", "Anklets", "Brooches"],
+                         ["Mixed"] + JEWELLERY_CATEGORIES[:-1],
                          field="category"),
                 Question("metal", "Metal", "select",
                          ["Gold-tone", "Silver-tone", "Rose gold-tone", "Sterling silver (925)", "Gold-plated",
@@ -98,9 +140,10 @@ PRESETS: dict[str, Preset] = {
                 "Lay out every bar you want counted. For full cartons, photograph one and type the count.",
             ],
             per_photo="15-25 bars or boxes",
+            categories=SOAP_CATEGORIES,
             questions=[
                 Question("type", "What's in this batch?", "select",
-                         ["Mixed", "Bar soap", "Liquid soap", "Bath bombs", "Body butter", "Gift sets"],
+                         ["Mixed"] + SOAP_CATEGORIES[:-1],
                          field="category"),
                 Question("weight", "Weight / size, if all the same", help="e.g. 4 oz. Leave blank to read it from labels.",
                          field="size"),
@@ -121,6 +164,7 @@ PRESETS: dict[str, Preset] = {
             background="Plain matte surface that contrasts with the jars: white for dark/amber jars, black for white or clear ones.",
             tips=COMMON_TIPS + ["Labels facing the camera; shoot from slightly above if the label is on the side."],
             per_photo="10-20 candles",
+            categories=CANDLE_CATEGORIES,
             questions=[
                 Question("wax", "Wax", "select",
                          ["Soy", "Coconut", "Beeswax", "Paraffin", "Blend", "Not sure"], field="material"),

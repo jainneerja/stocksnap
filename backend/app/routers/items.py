@@ -4,8 +4,11 @@ import csv
 import io
 import re
 
+from typing import Literal, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy import func, or_
 from sqlmodel import Session, select
 
@@ -78,9 +81,27 @@ def _index_image(request: Request, item: Item) -> None:
     request.app.state.ai.index_item(item, load_image(path.read_bytes()))
 
 
+SORTS = {
+    "newest": (Item.created_at.desc(), Item.id.desc()),
+    "oldest": (Item.created_at.asc(), Item.id.asc()),
+    "name": (func.lower(Item.name).asc(), Item.size.asc()),
+    "price_high": (Item.price_cents.desc(),),
+    "price_low": (Item.price_cents.asc(),),
+    "stock_low": (Item.quantity.asc(),),
+    "stock_high": (Item.quantity.desc(),),
+}
+
+
 @router.get("", response_model=list[ItemRead])
 def list_items(
-    q: str = "", low_stock: bool = False, session: Session = Depends(get_session)
+    q: str = "",
+    category: str = "",
+    batch_id: Optional[int] = None,
+    stock: Literal["all", "in", "low", "out"] = "all",
+    material: str = "",
+    sort: Literal["newest", "oldest", "name", "price_high", "price_low", "stock_low", "stock_high"] = "newest",
+    low_stock: bool = False,  # kept for older clients; same as stock=low
+    session: Session = Depends(get_session),
 ):
     stmt = select(Item)
     if q:
@@ -91,17 +112,101 @@ def list_items(
                 Item.sku.ilike(like),
                 Item.tags.ilike(like),
                 Item.category.ilike(like),
+                Item.material.ilike(like),
                 Item.barcode == q.strip(),
             )
         )
+    if category:
+        stmt = stmt.where(Item.category == category)
+    if material:
+        stmt = stmt.where(Item.material == material)
+    if batch_id is not None:
+        in_batch = select(StockMove.item_id).where(StockMove.batch_id == batch_id)
+        stmt = stmt.where(Item.id.in_(in_batch))
     if low_stock:
-        stmt = stmt.where(Item.quantity <= Item.low_stock_threshold)
-    return session.exec(stmt.order_by(Item.updated_at.desc())).all()
+        stock = "low"
+    if stock == "in":
+        stmt = stmt.where(Item.quantity > 0)
+    elif stock == "low":
+        stmt = stmt.where(Item.quantity > 0, Item.quantity <= Item.low_stock_threshold)
+    elif stock == "out":
+        stmt = stmt.where(Item.quantity <= 0)
+    return session.exec(stmt.order_by(*SORTS[sort])).all()
+
+
+class Facet(BaseModel):
+    name: str
+    items: int
+    units: int
+
+
+class BatchFacet(BaseModel):
+    id: int
+    label: str
+    items: int
+
+
+class Facets(BaseModel):
+    total_items: int
+    total_units: int
+    stock_value_cents: int
+    categories: list[Facet]
+    materials: list[Facet]
+    batches: list[BatchFacet]
+    stock: dict[str, int]  # in / low / out
+
+
+@router.get("/facets", response_model=Facets)
+def facets(session: Session = Depends(get_session)):
+    """Counts for the filter chips: categories, materials, batches, stock state."""
+    from ..models import Batch
+    from ..services.presets import PRESETS
+
+    items = session.exec(select(Item)).all()
+
+    def group(key) -> list[Facet]:
+        acc: dict[str, list[int]] = {}
+        for it in items:
+            k = (key(it) or "").strip()
+            if not k:
+                continue
+            a = acc.setdefault(k, [0, 0])
+            a[0] += 1
+            a[1] += max(it.quantity, 0)
+        return sorted((Facet(name=k, items=v[0], units=v[1]) for k, v in acc.items()),
+                      key=lambda f: (-f.items, f.name))
+
+    batch_rows = session.exec(
+        select(Batch, func.count(func.distinct(StockMove.item_id)))
+        .join(StockMove, StockMove.batch_id == Batch.id)
+        .group_by(Batch.id)
+        .order_by(Batch.id.desc())
+    ).all()
+    batches = []
+    for b, n in batch_rows:
+        dt = b.created_at.astimezone()
+        when = f"{dt:%b} {dt.day}"  # no %-d: it isn't supported on Windows
+        label = f"#{b.id} · {PRESETS[b.preset].label if b.preset in PRESETS else b.preset} · {when}"
+        batches.append(BatchFacet(id=b.id, label=label, items=n))
+
+    return Facets(
+        total_items=len(items),
+        total_units=sum(max(i.quantity, 0) for i in items),
+        stock_value_cents=sum(max(i.quantity, 0) * i.cost_cents for i in items),
+        categories=group(lambda i: i.category),
+        materials=group(lambda i: i.material),
+        batches=batches,
+        stock={
+            "in": sum(1 for i in items if i.quantity > 0),
+            "low": sum(1 for i in items if 0 < i.quantity <= i.low_stock_threshold),
+            "out": sum(1 for i in items if i.quantity <= 0),
+        },
+    )
 
 
 @router.get("/export.csv")
 def export_items(session: Session = Depends(get_session)):
-    items = session.exec(select(Item).order_by(Item.sku)).all()
+    items = session.exec(select(Item).order_by(Item.category, func.lower(Item.name))).all()
     buf = io.StringIO()
     w = csv.writer(buf)
     w.writerow(["sku", "name", "category", "color", "size", "material", "barcode",

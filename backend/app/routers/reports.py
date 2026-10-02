@@ -155,6 +155,8 @@ class StockRow(BaseModel):
     sku: str
     name: str
     size: str
+    category: str
+    image_path: Optional[str]
     opening: int
     added: int  # new stock: initial + bulk/scan intake
     sold: int  # net of undone sales
@@ -164,9 +166,21 @@ class StockRow(BaseModel):
     closing_value_cents: int
 
 
+class CategoryStock(BaseModel):
+    category: str
+    items: int
+    opening: int
+    added: int
+    sold: int
+    adjusted: int
+    closing: int
+    closing_value_cents: int
+
+
 class StockMonth(BaseModel):
     month: str  # YYYY-MM
-    rows: list[StockRow]
+    rows: list[StockRow]  # sorted by category, then name
+    by_category: list[CategoryStock]  # biggest first
     totals: dict[str, int]
 
 
@@ -188,7 +202,9 @@ def _month_bounds(month: Optional[str]) -> tuple[str, datetime, datetime]:
 
 
 @router.get("/stock", response_model=StockMonth)
-def stock_by_month(month: Optional[str] = None, session: Session = Depends(get_session)):
+def stock_by_month(
+    month: Optional[str] = None, category: str = "", session: Session = Depends(get_session)
+):
     """Opening, added, sold, adjusted and closing stock for every item in a month."""
     label, lo, hi = _month_bounds(month)
     moves = session.exec(select(StockMove).where(StockMove.created_at < hi)).all()
@@ -214,28 +230,42 @@ def stock_by_month(month: Optional[str] = None, session: Session = Depends(get_s
         closing = a["opening"] + a["added"] - a["sold"] + a["adjusted"]
         if not any(a.values()) and not closing:
             continue
+        if category and it.category != category:
+            continue
         rows.append(StockRow(
             item_id=item_id, sku=it.sku, name=it.name, size=it.size, closing=closing,
+            category=it.category or "Uncategorised", image_path=it.image_path,
             unit_cost_cents=it.cost_cents, closing_value_cents=max(closing, 0) * it.cost_cents, **a,
         ))
-    rows.sort(key=lambda r: r.sku)
-    totals = {k: sum(getattr(r, k) for r in rows)
-              for k in ("opening", "added", "sold", "adjusted", "closing", "closing_value_cents")}
-    return StockMonth(month=label, rows=rows, totals=totals)
+    rows.sort(key=lambda r: (r.category.lower(), r.name.lower(), r.size))
+    keys = ("opening", "added", "sold", "adjusted", "closing", "closing_value_cents")
+    cats: dict[str, CategoryStock] = {}
+    for r in rows:
+        c = cats.setdefault(r.category, CategoryStock(category=r.category, items=0, **{k: 0 for k in keys}))
+        c.items += 1
+        for k in keys:
+            setattr(c, k, getattr(c, k) + getattr(r, k))
+    by_category = sorted(cats.values(), key=lambda c: (-c.closing, -c.items, c.category))
+    totals = {k: sum(getattr(r, k) for r in rows) for k in keys}
+    return StockMonth(month=label, rows=rows, by_category=by_category, totals=totals)
 
 
 @router.get("/stock.csv")
-def stock_csv(month: Optional[str] = None, session: Session = Depends(get_session)):
-    rep = stock_by_month(month, session)
+def stock_csv(month: Optional[str] = None, category: str = "", session: Session = Depends(get_session)):
+    rep = stock_by_month(month, category, session)
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["sku", "item", "size", "opening", "added", "sold", "adjusted", "closing",
+    w.writerow(["category", "sku", "item", "size", "opening", "added", "sold", "adjusted", "closing",
                 "unit_cost", "closing_value"])
     for r in rep.rows:
-        w.writerow([r.sku, r.name, r.size, r.opening, r.added, r.sold, r.adjusted, r.closing,
+        w.writerow([r.category, r.sku, r.name, r.size, r.opening, r.added, r.sold, r.adjusted, r.closing,
                     _money(r.unit_cost_cents), _money(r.closing_value_cents)])
+    w.writerow([])
+    for c in rep.by_category:
+        w.writerow([c.category, "", f"SUBTOTAL ({c.items} items)", "", c.opening, c.added, c.sold,
+                    c.adjusted, c.closing, "", _money(c.closing_value_cents)])
     t = rep.totals
-    w.writerow(["TOTAL", "", "", t["opening"], t["added"], t["sold"], t["adjusted"], t["closing"],
+    w.writerow(["ALL", "", "TOTAL", "", t["opening"], t["added"], t["sold"], t["adjusted"], t["closing"],
                 "", _money(t["closing_value_cents"])])
     return StreamingResponse(
         iter([buf.getvalue()]),

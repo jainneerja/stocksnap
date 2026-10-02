@@ -152,3 +152,24 @@ def test_blank_photo_warns(client):
 
 def test_unknown_preset(client):
     assert client.post("/api/batches", json={"preset": "spaceships"}).status_code == 400
+
+
+def test_bulk_categories_come_from_a_fixed_list(client):
+    def reader(img, hint):
+        assert "MUST be one of" in hint and "Pins & Brooches" in hint
+        return Draft(name="Anchor brooch", category="brooch", description="x")
+
+    client.vision.label_reader = reader
+    b = client.post("/api/batches", json={"preset": "jewellery", "answers": {}}).json()
+    data, n = jewellery_tray(seed=4, cols=3, rows=1)
+    upload(client, b["id"], data)
+    client.post(f"/api/batches/{b['id']}/describe")
+    out = client.get(f"/api/batches/{b['id']}").json()
+    assert {g["category"] for g in out["groups"]} == {"Pins & Brooches"}
+    items = client.post(f"/api/batches/{b['id']}/save").json()
+    assert items[0]["sku"].startswith("PIN-")
+
+    # batch filter + facet
+    f = client.get("/api/items/facets").json()
+    assert f["batches"][0]["id"] == b["id"] and f["batches"][0]["items"] == n
+    assert len(client.get("/api/items", params={"batch_id": b["id"]}).json()) == n

@@ -34,6 +34,17 @@ export function App() {
     api.health().then(setHealth).catch(() => setHealth(null));
   }, []);
 
+  // Follow the address bar too (links like /#reports, browser back/forward).
+  useEffect(() => {
+    const onHash = () => {
+      const h = location.hash.slice(1);
+      const found = TABS.find((t) => t.id === h);
+      if (found) setTab(found.id);
+    };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
   useEffect(() => {
     history.replaceState(null, "", `#${tab}`);
   }, [tab]);

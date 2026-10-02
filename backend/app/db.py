@@ -47,6 +47,8 @@ def _migrate(engine) -> None:
                 if col not in have:
                     conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}")
 
+    _tidy_bulk_categories(engine)
+
     # Backfill the stock ledger for data created before it existed.
     with Session(engine) as s:
         if s.exec(select(StockMove.id).limit(1)).first() is not None:
@@ -67,6 +69,35 @@ def _migrate(engine) -> None:
                 s.add(StockMove(item_id=it.id, delta=opening, reason="initial",
                                 unit_cost_cents=it.cost_cents, created_at=it.created_at))
         s.commit()
+
+
+def _tidy_bulk_categories(engine) -> None:
+    """Items added by bulk intake before categories were fixed lists get mapped
+    onto their product type's list (e.g. "Brooch" -> "Pins & Brooches")."""
+    from sqlmodel import Session, select
+
+    from .models import Batch, Item, StockMove
+    from .services.presets import PRESETS, normalize_category
+
+    with Session(engine) as s:
+        rows = s.exec(
+            select(Item, Batch.preset)
+            .join(StockMove, StockMove.item_id == Item.id)
+            .join(Batch, Batch.id == StockMove.batch_id)
+        ).all()
+        changed = False
+        for item, preset_key in rows:
+            preset = PRESETS.get(preset_key)
+            if not preset or not preset.categories or item.category in preset.categories:
+                continue
+            cat = normalize_category(item.category, preset.categories)
+            if cat == preset.categories[-1]:  # category unhelpful ("Jewellery") - try the name
+                cat = normalize_category(item.name, preset.categories)
+            item.category = cat
+            s.add(item)
+            changed = True
+        if changed:
+            s.commit()
 
 
 def get_session(request: Request) -> Iterator[Session]:

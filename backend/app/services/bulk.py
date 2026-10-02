@@ -21,7 +21,7 @@ from . import ledger
 from .ai import AI
 from .images import load_image, resolve_image, save_image
 from .matcher import rank
-from .presets import PRESETS, resolve_answers
+from .presets import PRESETS, normalize_category, resolve_answers
 from .segment import crop, find_pieces
 from .vision import VisionUnavailable
 
@@ -150,6 +150,8 @@ def describe_batch(engine, ai: AI, settings: Settings, batch_id: int) -> None:
             fields, attrs = resolve_answers(preset, answers)
             context = "; ".join(f"{k}: {v}" for k, v in {**fields_for_prompt(fields), **attrs}.items())
             hint = preset.ai_hint + (f" The seller says: {context}." if context else "")
+            if preset.categories and "category" not in fields:
+                hint += " The category MUST be one of: " + ", ".join(preset.categories) + "."
 
             pending = session.exec(
                 select(BatchGroup).where(
@@ -174,7 +176,7 @@ def describe_batch(engine, ai: AI, settings: Settings, batch_id: int) -> None:
                 group.tags = group.tags or ", ".join(draft.tags)
                 group.color = group.color or draft.color
                 if "category" not in fields:
-                    group.category = group.category or draft.category
+                    group.category = group.category or normalize_category(draft.category, preset.categories)
                 if "material" not in fields:
                     group.material = group.material or draft.material
                 if "size" not in fields:
@@ -285,7 +287,7 @@ def save_batch(session: Session, ai: AI, batch: Batch, auto_sku) -> list[Item]:
             item = Item(
                 name=g.name.strip() or f"{preset.label} #{first_number(g)}",
                 description=g.description,
-                category=g.category or preset.label,
+                category=g.category or (preset.categories[-1] if preset.categories else preset.label),
                 tags=g.tags,
                 color=g.color,
                 size=g.size,

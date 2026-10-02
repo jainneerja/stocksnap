@@ -203,3 +203,29 @@ def test_health_and_backup(client):
     assert h["status"] == "ok" and h["matcher"]["model"] == "lite-v1"
     r = client.get("/api/backup")
     assert r.status_code == 200 and r.content[:2] == b"PK"
+
+
+# ------------------------------------------------------------ filters & facets
+
+
+def test_filters_sort_and_facets(client):
+    a = new_item(client, name="Gold hoops", category="Earrings", material="Gold-tone", quantity=5)
+    b = new_item(client, name="Silver ring", category="Rings", material="Silver-tone", quantity=1)
+    c = new_item(client, name="Anchor pin", category="Pins & Brooches", quantity=0, price_cents=900)
+
+    names = lambda **p: [i["name"] for i in client.get("/api/items", params=p).json()]
+    assert names() == ["Anchor pin", "Silver ring", "Gold hoops"]          # newest first by default
+    assert names(sort="name") == ["Anchor pin", "Gold hoops", "Silver ring"]
+    assert names(sort="price_low")[0] == "Anchor pin"
+    assert names(category="Rings") == ["Silver ring"]
+    assert names(material="Gold-tone") == ["Gold hoops"]
+    assert names(stock="out") == ["Anchor pin"]
+    assert names(stock="low") == ["Silver ring"]
+    assert names(stock="in", sort="name") == ["Gold hoops", "Silver ring"]
+    assert names(q="silver") == ["Silver ring"]                            # matches material too
+
+    f = client.get("/api/items/facets").json()
+    assert {x["name"]: x["items"] for x in f["categories"]} == {"Earrings": 1, "Rings": 1, "Pins & Brooches": 1}
+    assert f["stock"] == {"in": 2, "low": 1, "out": 1}
+    assert f["total_units"] == 6
+    assert client.get("/api/items", params={"sort": "bogus"}).status_code == 422

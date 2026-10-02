@@ -43,6 +43,7 @@ export function ItemForm({
   onCancel,
   onAddStock,
   editingId,
+  categories,
 }: {
   initial: FormValues;
   imagePath?: string | null;
@@ -54,8 +55,15 @@ export function ItemForm({
   /** When set, the form warns about an existing item with the same name + size. */
   onAddStock?: (item: Item) => void;
   editingId?: number;
+  /** Suggestions for the category box; fetched from inventory when not given. */
+  categories?: string[];
 }) {
   const [v, setV] = useState(initial);
+  const [knownCats, setKnownCats] = useState<string[]>(categories ?? []);
+  useEffect(() => {
+    if (categories) return;
+    api.facets().then((f) => setKnownCats(f.categories.map((c) => c.name))).catch(() => undefined);
+  }, [categories]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [more, setMore] = useState(false);
@@ -160,7 +168,12 @@ export function ItemForm({
       </label>
       <label>
         Category
-        <input value={v.category} onChange={set("category")} placeholder="T-shirt" />
+        <input value={v.category} onChange={set("category")} placeholder="Pick or type, e.g. Earrings" list="known-categories" />
+        <datalist id="known-categories">
+          {knownCats.map((c) => (
+            <option key={c} value={c} />
+          ))}
+        </datalist>
       </label>
       <button type="button" className="link" onClick={() => setMore(!more)}>
         {more ? "Fewer details" : "More details (tags, colour, barcode, SKU)"}

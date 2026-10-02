@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, imageUrl, type Item, type Sale } from "../api";
+import { api, imageUrl, type Facets, type Item, type Sale } from "../api";
+import { CategoryChips } from "../components/CategoryChips";
 import { PhotoButton } from "../components/PhotoButton";
 import { isoDate, money } from "../format";
 
@@ -9,13 +10,20 @@ export function SellPage({ toast }: { toast: (msg: string) => void }) {
   const [today, setToday] = useState<Sale[]>([]);
   const [found, setFound] = useState<Item[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const [category, setCategory] = useState("");
+  const [facets, setFacets] = useState<Facets | null>(null);
 
   const load = useCallback(async () => {
     const d = isoDate();
-    const [its, sales] = await Promise.all([api.items(q), api.sales(d, d)]);
+    const [its, sales, f] = await Promise.all([
+      api.items({ q, category, stock: "in", sort: "name" }),
+      api.sales(d, d),
+      api.facets(),
+    ]);
     setItems(its);
     setToday(sales);
-  }, [q]);
+    setFacets(f);
+  }, [q, category]);
 
   useEffect(() => {
     const t = setTimeout(() => load().catch((e) => toast(e.message)), 150);
@@ -73,6 +81,9 @@ export function SellPage({ toast }: { toast: (msg: string) => void }) {
         />
         <PhotoButton label={busy ? "Finding…" : "Find by photo"} onPhoto={findByPhoto} disabled={busy} variant="secondary" />
       </div>
+      {facets && !found && (
+        <CategoryChips facets={facets.categories} total={facets.stock.in} value={category} onChange={setCategory} />
+      )}
       {found && (
         <p className="muted">
           Photo matches · <button className="link" onClick={() => setFound(null)}>show all</button>
@@ -92,7 +103,7 @@ export function SellPage({ toast }: { toast: (msg: string) => void }) {
             </span>
           </button>
         ))}
-        {!shown.length && <p className="muted">No items yet — add some on the Add stock tab.</p>}
+        {!shown.length && <p className="muted">{q || category ? "Nothing in stock matches." : "No items in stock yet. Add some with Add or Bulk."}</p>}
       </div>
 
       <h2>

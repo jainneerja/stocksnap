@@ -81,6 +81,34 @@ export interface Health {
   matcher: { available: boolean; model: string | null };
 }
 
+export type SortKey = "newest" | "oldest" | "name" | "price_high" | "price_low" | "stock_low" | "stock_high";
+export type StockState = "all" | "in" | "low" | "out";
+
+export interface ItemFilters {
+  q?: string;
+  category?: string;
+  material?: string;
+  batch_id?: number;
+  stock?: StockState;
+  sort?: SortKey;
+}
+
+export interface Facet {
+  name: string;
+  items: number;
+  units: number;
+}
+
+export interface Facets {
+  total_items: number;
+  total_units: number;
+  stock_value_cents: number;
+  categories: Facet[];
+  materials: Facet[];
+  batches: { id: number; label: string; items: number }[];
+  stock: { in: number; low: number; out: number };
+}
+
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message);
@@ -113,7 +141,7 @@ const json = (method: string, body: unknown): RequestInit => ({
   body: JSON.stringify(body),
 });
 
-const qs = (params: Record<string, string | boolean | undefined>) => {
+const qs = (params: Record<string, string | number | boolean | undefined>) => {
   const p = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => v !== undefined && v !== "" && p.set(k, String(v)));
   const s = p.toString();
@@ -123,8 +151,11 @@ const qs = (params: Record<string, string | boolean | undefined>) => {
 export const api = {
   health: () => req<Health>("/api/health"),
 
-  items: (q = "", lowStock = false) =>
-    req<Item[]>(`/api/items${qs({ q, low_stock: lowStock || undefined })}`),
+  items: (f: ItemFilters | string = {}) => {
+    const p = typeof f === "string" ? { q: f } : f;
+    return req<Item[]>(`/api/items${qs({ ...p, batch_id: p.batch_id ? String(p.batch_id) : undefined })}`);
+  },
+  facets: () => req<Facets>("/api/items/facets"),
   createItem: (data: ItemInput) => req<Item>("/api/items", json("POST", data)),
   updateItem: (id: number, data: Partial<ItemInput>) => req<Item>(`/api/items/${id}`, json("PATCH", data)),
   adjust: (id: number, delta: number) => req<Item>(`/api/items/${id}/adjust`, json("POST", { delta })),
@@ -251,6 +282,8 @@ export interface StockRow {
   sku: string;
   name: string;
   size: string;
+  category: string;
+  image_path: string | null;
   opening: number;
   added: number;
   sold: number;
@@ -260,9 +293,21 @@ export interface StockRow {
   closing_value_cents: number;
 }
 
+export interface CategoryStock {
+  category: string;
+  items: number;
+  opening: number;
+  added: number;
+  sold: number;
+  adjusted: number;
+  closing: number;
+  closing_value_cents: number;
+}
+
 export interface StockMonth {
   month: string;
   rows: StockRow[];
+  by_category: CategoryStock[];
   totals: Record<string, number>;
 }
 
@@ -288,5 +333,6 @@ export const bulk = {
   discard: (id: number) => req<void>(`/api/batches/${id}`, { method: "DELETE" }),
 };
 
-export const stockMonth = (month: string) => req<StockMonth>(`/api/reports/stock?month=${month}`);
+export const stockMonth = (month: string, category = "") =>
+  req<StockMonth>(`/api/reports/stock${qs({ month, category })}`);
 export const barcodeUrl = (itemId: number) => `/api/items/${itemId}/barcode.svg`;

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, stockMonth, type Expense, type StockMonth, type Summary } from "../api";
+import { api, imageUrl, stockMonth, type CategoryStock, type Expense, type StockMonth, type StockRow, type Summary } from "../api";
 import { isoDate, money, monthRange, toCents } from "../format";
 
 const CATEGORIES = ["Materials", "Packaging", "Shipping", "Booth / market fees", "Marketing", "Equipment", "Other"];
@@ -124,9 +124,10 @@ function Stat({ label, value, sub, tone }: { label: string; value: string; sub?:
 }
 
 function StockTable({ stock }: { stock: StockMonth }) {
-  const [all, setAll] = useState(false);
-  const rows = all ? stock.rows : stock.rows.slice(0, 12);
+  const [open, setOpen] = useState<Record<string, boolean>>({});
   const t = stock.totals;
+  const rowsBy = (cat: string) => stock.rows.filter((r) => r.category === cat);
+  const signed = (n: number, minus = false) => (n ? `${minus ? "−" : n > 0 ? "+" : "−"}${Math.abs(n)}` : "");
   return (
     <>
       <h2>Stock this month</h2>
@@ -137,41 +138,98 @@ function StockTable({ stock }: { stock: StockMonth }) {
         <Stat label="End of month" value={String(t.closing ?? 0)} sub={`${money(t.closing_value_cents ?? 0)} at cost`} />
       </div>
       {t.adjusted ? <p className="muted small">Manual corrections: {t.adjusted > 0 ? "+" : ""}{t.adjusted} units.</p> : null}
+      <p className="muted small no-print">By category. Tap one to see its items.</p>
       <div className="table-wrap">
         <table className="stock">
           <thead>
             <tr>
-              <th>Item</th><th>Start</th><th>Added</th><th>Sold</th><th>Adj.</th><th>End</th>
+              <th>Category</th><th>Start</th><th>Added</th><th>Sold</th><th>Adj.</th><th>End</th><th className="hide-sm">Value</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.item_id}>
-                <td>
-                  {r.name}
-                  {r.size && <span className="size-chip">{r.size}</span>}
-                  <div className="muted small">{r.sku}</div>
-                </td>
-                <td>{r.opening}</td>
-                <td>{r.added ? `+${r.added}` : ""}</td>
-                <td>{r.sold ? `−${r.sold}` : ""}</td>
-                <td>{r.adjusted ? (r.adjusted > 0 ? `+${r.adjusted}` : `−${-r.adjusted}`) : ""}</td>
-                <td><strong>{r.closing}</strong></td>
-              </tr>
+            {stock.by_category.map((c) => (
+              <CategoryRows
+                key={c.category}
+                cat={c}
+                open={!!open[c.category]}
+                onToggle={() => setOpen((o) => ({ ...o, [c.category]: !o[c.category] }))}
+                rows={rowsBy(c.category)}
+                signed={signed}
+              />
             ))}
-            {!rows.length && (
+            {!stock.by_category.length && (
               <tr>
-                <td colSpan={6} className="muted">No stock this month.</td>
+                <td colSpan={7} className="muted">No stock this month.</td>
               </tr>
             )}
           </tbody>
+          {stock.by_category.length > 1 && (
+            <tfoot>
+              <tr>
+                <td>All categories</td>
+                <td>{t.opening}</td>
+                <td>{signed(t.added)}</td>
+                <td>{signed(t.sold, true)}</td>
+                <td>{signed(t.adjusted)}</td>
+                <td><strong>{t.closing}</strong></td>
+                <td className="hide-sm">{money(t.closing_value_cents ?? 0)}</td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
-      {stock.rows.length > 12 && (
-        <button className="link no-print" onClick={() => setAll(!all)}>
-          {all ? "Show fewer" : `Show all ${stock.rows.length} items`}
-        </button>
-      )}
+    </>
+  );
+}
+
+function CategoryRows({
+  cat,
+  rows,
+  open,
+  onToggle,
+  signed,
+}: {
+  cat: CategoryStock;
+  rows: StockRow[];
+  open: boolean;
+  onToggle: () => void;
+  signed: (n: number, minus?: boolean) => string;
+}) {
+  return (
+    <>
+      <tr className="cat-row" onClick={onToggle} aria-expanded={open}>
+        <td>
+          <span className="caret">{open ? "▾" : "▸"}</span> <strong>{cat.category}</strong>
+          <span className="muted small"> · {cat.items} {cat.items === 1 ? "item" : "items"}</span>
+        </td>
+        <td>{cat.opening}</td>
+        <td>{signed(cat.added)}</td>
+        <td>{signed(cat.sold, true)}</td>
+        <td>{signed(cat.adjusted)}</td>
+        <td><strong>{cat.closing}</strong></td>
+        <td className="hide-sm">{money(cat.closing_value_cents)}</td>
+      </tr>
+      {open &&
+        rows.map((r) => (
+          <tr key={r.item_id} className="item-row">
+            <td>
+              <div className="item-cell">
+                {r.image_path ? <img src={imageUrl(r.image_path)} alt="" loading="lazy" /> : <span className="thumb-ph sm">{r.name[0]}</span>}
+                <div>
+                  {r.name}
+                  {r.size && <span className="size-chip">{r.size}</span>}
+                  <div className="muted small">{r.sku}</div>
+                </div>
+              </div>
+            </td>
+            <td>{r.opening}</td>
+            <td>{signed(r.added)}</td>
+            <td>{signed(r.sold, true)}</td>
+            <td>{signed(r.adjusted)}</td>
+            <td>{r.closing}</td>
+            <td className="hide-sm">{money(r.closing_value_cents)}</td>
+          </tr>
+        ))}
     </>
   );
 }

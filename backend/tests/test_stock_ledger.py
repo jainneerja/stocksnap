@@ -29,7 +29,7 @@ def test_every_change_is_in_the_ledger(client):
     assert row["closing_value_cents"] == 12 * 200
     assert rep["totals"]["closing"] == 12
     csv = client.get(f"/api/reports/stock.csv?month={rep['month']}").text
-    assert "Lavender soap" in csv and "TOTAL" in csv
+    assert "Lavender soap" in csv and "TOTAL" in csv and "Soap" in csv
 
 
 def test_opening_comes_from_earlier_months(client):
@@ -80,3 +80,20 @@ def test_migration_from_v01_database(tmp_path):
     make_engine(Settings(data_dir=data))  # running again changes nothing
     with Session(engine) as s:
         assert len(s.exec(select(StockMove)).all()) == 2
+
+
+def test_stock_grouped_by_category(client):
+    _item(client, name="Hoops", category="Earrings", quantity=4)
+    _item(client, name="Studs", category="Earrings", quantity=6)
+    r = _item(client, name="Band", category="Rings", quantity=3)
+    client.post("/api/sales", json={"item_id": r["id"], "quantity": 1})
+
+    rep = client.get("/api/reports/stock").json()
+    cats = {c["category"]: c for c in rep["by_category"]}
+    assert cats["Earrings"]["items"] == 2 and cats["Earrings"]["closing"] == 10
+    assert cats["Rings"]["sold"] == 1 and cats["Rings"]["closing"] == 2
+    assert rep["by_category"][0]["category"] == "Earrings"          # biggest first
+    assert [x["name"] for x in rep["rows"]] == ["Hoops", "Studs", "Band"]
+    only = client.get("/api/reports/stock", params={"category": "Rings"}).json()
+    assert [x["name"] for x in only["rows"]] == ["Band"] and only["totals"]["closing"] == 2
+    assert "SUBTOTAL" in client.get("/api/reports/stock.csv").text
