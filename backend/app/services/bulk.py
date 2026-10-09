@@ -29,7 +29,7 @@ log = logging.getLogger(__name__)
 
 GROUP_THRESHOLDS = {"lite-v1": 0.95, "openclip-vit-b-32": 0.92}
 
-_running: set[int] = set()
+_running: set[str] = set()
 _lock = threading.Lock()
 
 
@@ -131,11 +131,15 @@ def set_detection_included(session: Session, det: Detection, include: bool) -> N
 # ---------------------------------------------------------------- describe
 
 
-def start_describe(engine, ai: AI, settings: Settings, batch_id: int) -> bool:
+def _key(settings: Settings, batch_id: int) -> str:
+    return f"{settings.data_dir}:{batch_id}"  # batch ids repeat across shops
+
+
+def start_describe(settings: Settings, batch_id: int) -> bool:
     with _lock:
-        if batch_id in _running:
+        if _key(settings, batch_id) in _running:
             return False
-        _running.add(batch_id)
+        _running.add(_key(settings, batch_id))
     return True
 
 
@@ -181,6 +185,8 @@ def describe_batch(engine, ai: AI, settings: Settings, batch_id: int) -> None:
                     group.material = group.material or draft.material
                 if "size" not in fields:
                     group.size = group.size or draft.size
+                if "brand" not in fields:
+                    group.brand = group.brand or draft.brand
                 if "price_cents" not in fields and draft.price_cents and not group.price_cents:
                     group.price_cents = draft.price_cents
                 group.status = "done"
@@ -195,15 +201,15 @@ def describe_batch(engine, ai: AI, settings: Settings, batch_id: int) -> None:
             session.commit()
     finally:
         with _lock:
-            _running.discard(batch_id)
+            _running.discard(_key(settings, batch_id))
 
 
 def fields_for_prompt(fields: dict) -> dict:
     return {k: v for k, v in fields.items() if not k.endswith("_cents")}
 
 
-def is_running(batch_id: int) -> bool:
-    return batch_id in _running
+def is_running(settings: Settings, batch_id: int) -> bool:
+    return _key(settings, batch_id) in _running
 
 
 def _merge_same_label(session: Session, batch_id: int) -> None:
@@ -292,6 +298,7 @@ def save_batch(session: Session, ai: AI, batch: Batch, auto_sku) -> list[Item]:
                 color=g.color,
                 size=g.size,
                 material=g.material,
+                brand=g.brand,
                 cost_cents=g.cost_cents,
                 price_cents=g.price_cents,
                 quantity=0,

@@ -35,7 +35,8 @@ def test_every_change_is_in_the_ledger(client):
 def test_opening_comes_from_earlier_months(client):
     it = _item(client, quantity=5)
     # move the opening stock into last month
-    engine = client.app.state.engine
+    reg = client.app.state.shops
+    engine = reg.context(reg.list()[0]).engine
     with Session(engine) as s:
         mv = s.exec(select(StockMove).where(StockMove.item_id == it["id"])).one()
         mv.created_at = datetime.now(timezone.utc) - timedelta(days=40)

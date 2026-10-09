@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { barcodeUrl, bulk, imageUrl, type Batch, type BatchPhoto, type Group, type Item, type Preset } from "../api";
 import { PhotoButton } from "../components/PhotoButton";
 import { money, toCents, toDollars } from "../format";
+import { useShop } from "../shop";
 
 type View =
   | { kind: "home" }
@@ -58,10 +59,12 @@ function Home({
   onPick: (p: Preset) => void;
   onOpen: (id: number) => void;
 }) {
+  const { shop } = useShop();
   const [open, setOpen] = useState<Batch[]>([]);
   useEffect(() => {
     bulk.open().then(setOpen).catch((e) => toast(e.message));
   }, [toast]);
+  const ordered = [...presets].sort((a, b) => Number(b.key === shop.kind) - Number(a.key === shop.kind));
 
   return (
     <section>
@@ -87,9 +90,12 @@ function Home({
       )}
       <h2>What are you adding?</h2>
       <div className="preset-grid">
-        {presets.map((p) => (
-          <button key={p.key} className="preset" onClick={() => onPick(p)}>
-            <strong>{p.label}</strong>
+        {ordered.map((p) => (
+          <button key={p.key} className={`preset ${p.key === shop.kind ? "main" : ""}`} onClick={() => onPick(p)}>
+            <strong>
+              {p.label}
+              {p.key === shop.kind && <span className="chip ok">Your main type</span>}
+            </strong>
             <span className="muted small">
               {p.mode === "unique" ? "Every piece is different - each gets its own ID" : "Identical items are grouped and counted"}
             </span>
@@ -507,7 +513,7 @@ function GroupRow({
           <div className="group-details">
             <textarea value={desc} rows={2} onChange={(e) => setDesc(e.target.value)} onBlur={() => desc !== g.description && update({ description: desc })} />
             <p className="muted small">
-              {[g.category, g.material, g.color, g.size].filter(Boolean).join(" · ")}
+              {[g.category, g.brand, g.material, g.color, g.size].filter(Boolean).join(" · ")}
               {g.tags && ` · ${g.tags}`}
             </p>
             {g.existing_item && (
@@ -525,6 +531,7 @@ function GroupRow({
 // ---------------------------------------------------------------- labels
 
 function Labels({ batch, items, onDone }: { batch: Batch; items: Item[]; onDone: () => void }) {
+  const { shop } = useShop();
   const units = (it: Item) => batch.groups.find((g) => g.item?.id === it.id)?.count ?? 1;
   const numberOf = (it: Item) => batch.groups.find((g) => g.item?.id === it.id)?.numbers[0];
   const [perUnit, setPerUnit] = useState(batch.mode === "unique");
@@ -551,6 +558,7 @@ function Labels({ batch, items, onDone }: { batch: Batch; items: Item[]; onDone:
       <div className="labels">
         {labels.map((it, i) => (
           <div className="label" key={`${it.id}-${i}`}>
+            <div className="label-shop">{shop.name}</div>
             <div className="label-top">
               <span>#{numberOf(it)}</span>
               <strong>{money(it.price_cents)}</strong>

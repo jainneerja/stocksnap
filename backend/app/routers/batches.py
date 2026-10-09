@@ -10,7 +10,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Re
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from ..db import get_session
+from ..db import current_shop, get_session, shop_settings
 from ..models import Batch, BatchGroup, BatchPhoto, Detection, Item, ItemRead
 from ..services import bulk
 from ..services.images import InvalidImage, load_image
@@ -62,6 +62,7 @@ class GroupOut(BaseModel):
     color: str
     size: str
     material: str
+    brand: str
     cost_cents: int
     price_cents: int
     include: bool
@@ -96,6 +97,7 @@ class GroupUpdate(BaseModel):
     color: Optional[str] = None
     size: Optional[str] = None
     material: Optional[str] = None
+    brand: Optional[str] = None
     cost_cents: Optional[int] = None
     price_cents: Optional[int] = None
     count_override: Optional[int] = None
@@ -127,7 +129,7 @@ def _get_batch(session: Session, batch_id: int) -> Batch:
     return b
 
 
-def batch_out(session: Session, b: Batch, warning: str = "") -> BatchOut:
+def batch_out(session: Session, b: Batch, settings, warning: str = "") -> BatchOut:
     preset = PRESETS[b.preset]
     dets = session.exec(select(Detection).where(Detection.batch_id == b.id).order_by(Detection.number)).all()
     photos = []
@@ -149,7 +151,7 @@ def batch_out(session: Session, b: Batch, warning: str = "") -> BatchOut:
         crops = ([rep.crop_path] if rep else []) + [d.crop_path for d in members if d is not rep][:3]
         groups.append(GroupOut(
             **g.model_dump(include={"id", "status", "name", "description", "category", "tags", "color",
-                                    "size", "material", "cost_cents", "price_cents", "include",
+                                    "size", "material", "brand", "cost_cents", "price_cents", "include",
                                     "count_override"}),
             count=bulk.group_count(session, g),
             numbers=[d.number for d in members],
@@ -169,7 +171,7 @@ def batch_out(session: Session, b: Batch, warning: str = "") -> BatchOut:
     }
     return BatchOut(
         id=b.id, preset=b.preset, preset_label=preset.label, mode=preset.mode,
-        answers=json.loads(b.answers or "{}"), status=b.status, describing=bulk.is_running(b.id),
+        answers=json.loads(b.answers or "{}"), status=b.status, describing=bulk.is_running(settings, b.id),
         created_at=b.created_at, photos=photos, groups=groups, progress=progress, warning=warning,
     )
 
@@ -180,27 +182,27 @@ def list_presets():
 
 
 @router.post("/batches", response_model=BatchOut, status_code=201)
-def create_batch(data: BatchCreate, session: Session = Depends(get_session)):
+def create_batch(data: BatchCreate, request: Request, session: Session = Depends(get_session)):
     if data.preset not in PRESETS:
         raise HTTPException(400, f"Unknown product type '{data.preset}'")
     b = Batch(preset=data.preset, answers=json.dumps({k: v for k, v in data.answers.items() if v}))
     session.add(b)
     session.commit()
     session.refresh(b)
-    return batch_out(session, b)
+    return batch_out(session, b, shop_settings(request))
 
 
 @router.get("/batches", response_model=list[BatchOut])
-def list_batches(open_only: bool = True, session: Session = Depends(get_session)):
+def list_batches(request: Request, open_only: bool = True, session: Session = Depends(get_session)):
     stmt = select(Batch).order_by(Batch.id.desc()).limit(20)
     if open_only:
         stmt = stmt.where(Batch.status != "saved")
-    return [batch_out(session, b) for b in session.exec(stmt).all()]
+    return [batch_out(session, b, shop_settings(request)) for b in session.exec(stmt).all()]
 
 
 @router.get("/batches/{batch_id}", response_model=BatchOut)
-def get_batch(batch_id: int, session: Session = Depends(get_session)):
-    return batch_out(session, _get_batch(session, batch_id))
+def get_batch(batch_id: int, request: Request, session: Session = Depends(get_session)):
+    return batch_out(session, _get_batch(session, batch_id), shop_settings(request))
 
 
 @router.post("/batches/{batch_id}/photos", response_model=BatchOut)
@@ -217,22 +219,22 @@ async def add_photo(
         img = load_image(data)
     except InvalidImage as exc:
         raise HTTPException(400, str(exc))
-    warning = bulk.add_photo(session, request.app.state.ai, request.app.state.settings, b, img)
+    warning = bulk.add_photo(session, request.app.state.ai, shop_settings(request), b, img)
     if b.status == "review":  # new photo after describing -> new pieces need describing
         b.status = "capturing"
         session.add(b)
         session.commit()
-    return batch_out(session, b, warning)
+    return batch_out(session, b, shop_settings(request), warning)
 
 
 @router.patch("/batches/{batch_id}/detections/{det_id}", response_model=BatchOut)
-def update_detection(batch_id: int, det_id: int, body: DetectionUpdate, session: Session = Depends(get_session)):
+def update_detection(batch_id: int, det_id: int, body: DetectionUpdate, request: Request, session: Session = Depends(get_session)):
     b = _get_batch(session, batch_id)
     det = session.get(Detection, det_id)
     if not det or det.batch_id != batch_id:
         raise HTTPException(404, "Piece not found")
     bulk.set_detection_included(session, det, body.include)
-    return batch_out(session, b)
+    return batch_out(session, b, shop_settings(request))
 
 
 @router.post("/batches/{batch_id}/describe", response_model=BatchOut)
@@ -243,14 +245,14 @@ def describe(batch_id: int, request: Request, tasks: BackgroundTasks, session: S
     b.status = "describing"
     session.add(b)
     session.commit()
-    app = request.app
-    if bulk.start_describe(app.state.engine, app.state.ai, app.state.settings, batch_id):
-        tasks.add_task(bulk.describe_batch, app.state.engine, app.state.ai, app.state.settings, batch_id)
-    return batch_out(session, b)
+    shop = current_shop(request)
+    if bulk.start_describe(shop.settings, batch_id):
+        tasks.add_task(bulk.describe_batch, shop.engine, request.app.state.ai, shop.settings, batch_id)
+    return batch_out(session, b, shop_settings(request))
 
 
 @router.patch("/batches/{batch_id}/groups/{group_id}", response_model=BatchOut)
-def update_group(batch_id: int, group_id: int, body: GroupUpdate, session: Session = Depends(get_session)):
+def update_group(batch_id: int, group_id: int, body: GroupUpdate, request: Request, session: Session = Depends(get_session)):
     b = _get_batch(session, batch_id)
     g = session.get(BatchGroup, group_id)
     if not g or g.batch_id != batch_id:
@@ -266,11 +268,11 @@ def update_group(batch_id: int, group_id: int, body: GroupUpdate, session: Sessi
         g.status = "done"  # the seller filled it in by hand
     session.add(g)
     session.commit()
-    return batch_out(session, b)
+    return batch_out(session, b, shop_settings(request))
 
 
 @router.post("/batches/{batch_id}/bulk-edit", response_model=BatchOut)
-def bulk_edit(batch_id: int, body: BulkPrice, session: Session = Depends(get_session)):
+def bulk_edit(batch_id: int, body: BulkPrice, request: Request, session: Session = Depends(get_session)):
     """e.g. 'all earrings $18' or 'every soap costs $2.10'."""
     b = _get_batch(session, batch_id)
     for g in session.exec(select(BatchGroup).where(BatchGroup.batch_id == batch_id)).all():
@@ -282,19 +284,20 @@ def bulk_edit(batch_id: int, body: BulkPrice, session: Session = Depends(get_ses
             g.cost_cents = body.cost_cents
         session.add(g)
     session.commit()
-    return batch_out(session, b)
+    return batch_out(session, b, shop_settings(request))
 
 
 @router.post("/batches/{batch_id}/save", response_model=list[ItemRead])
 def save(batch_id: int, request: Request, session: Session = Depends(get_session)):
     b = _get_batch(session, batch_id)
-    if bulk.is_running(batch_id):
+    if bulk.is_running(shop_settings(request), batch_id):
         raise HTTPException(409, "Still describing items - wait a moment.")
-    return bulk.save_batch(session, request.app.state.ai, b, _auto_sku)
+    prefix = current_shop(request).info.sku_prefix
+    return bulk.save_batch(session, request.app.state.ai, b, lambda it: _auto_sku(it, prefix))
 
 
 @router.delete("/batches/{batch_id}", status_code=204)
-def discard(batch_id: int, session: Session = Depends(get_session)):
+def discard(batch_id: int, request: Request, session: Session = Depends(get_session)):
     b = _get_batch(session, batch_id)
     if b.status == "saved":
         raise HTTPException(409, "Saved batches can't be discarded - their items are in inventory.")

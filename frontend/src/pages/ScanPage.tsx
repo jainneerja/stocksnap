@@ -3,6 +3,7 @@ import { api, imageUrl, type Item, type ScanResult } from "../api";
 import { emptyForm, formFromItem, ItemForm, type FormValues } from "../components/ItemForm";
 import { PhotoButton } from "../components/PhotoButton";
 import { money, toDollars } from "../format";
+import { useShop } from "../shop";
 
 /** `base` is set when adding a new size of a product you already stock. */
 type Stage =
@@ -16,6 +17,7 @@ type Stage =
 const NO_PHOTO: ScanResult = { image_path: "", barcode: null, barcode_format: null, barcode_item: null, matches: [] };
 
 export function ScanPage({ toast }: { toast: (msg: string) => void }) {
+  const { shop } = useShop();
   const [stage, setStage] = useState<Stage>({ kind: "start" });
   const [form, setForm] = useState<FormValues>(emptyForm);
   const [aiBusy, setAiBusy] = useState(false);
@@ -75,6 +77,7 @@ export function ScanPage({ toast }: { toast: (msg: string) => void }) {
             description: d.description,
             color: d.color,
             material: d.material,
+            brand: d.brand ?? "",
             size: d.size,
             price,
             tags: d.tags.join(", "),
@@ -95,7 +98,7 @@ export function ScanPage({ toast }: { toast: (msg: string) => void }) {
     <section>
       {stage.kind === "start" && (
         <div className="hero">
-          <h1>Add stock</h1>
+          <h1>Add stock to {shop.name}</h1>
           <p className="muted">
             Snap a photo of an item. StockSnap reads any barcode, checks if you already have it, and drafts a
             listing with local AI. Nothing leaves this computer.

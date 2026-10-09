@@ -31,7 +31,8 @@ def make_engine(settings: Settings):
 # Columns added after v0.1. SQLite's create_all never alters existing tables,
 # so add them here (idempotent, safe to run on every start).
 _NEW_COLUMNS = {
-    "item": {"attributes": "VARCHAR NOT NULL DEFAULT ''"},
+    "item": {"attributes": "VARCHAR NOT NULL DEFAULT ''", "brand": "VARCHAR NOT NULL DEFAULT ''"},
+    "batchgroup": {"brand": "VARCHAR NOT NULL DEFAULT ''"},
 }
 
 
@@ -43,6 +44,8 @@ def _migrate(engine) -> None:
     with engine.begin() as conn:
         for table, cols in _NEW_COLUMNS.items():
             have = {row[1] for row in conn.exec_driver_sql(f"PRAGMA table_info({table})")}
+            if not have:
+                continue  # table doesn't exist yet (create_all made the new one)
             for col, ddl in cols.items():
                 if col not in have:
                     conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}")
@@ -100,6 +103,34 @@ def _tidy_bulk_categories(engine) -> None:
             s.commit()
 
 
+SHOP_COOKIE = "stocksnap_shop"
+
+
+def current_shop(request: Request):
+    """The shop this request works on: ?shop=<slug>, else the cookie set when the
+    user picked a shop, else the first shop. 409 when no shop exists yet."""
+    from fastapi import HTTPException
+
+    cached = getattr(request.state, "shop", None)
+    if cached is not None:
+        return cached
+    reg = request.app.state.shops
+    info = reg.get(request.query_params.get("shop")) or reg.get(request.cookies.get(SHOP_COOKIE))
+    if info is None:
+        shops = reg.list()
+        if not shops:
+            raise HTTPException(409, "Set up your shop first.")
+        info = shops[0]
+    ctx = reg.context(info)
+    request.state.shop = ctx
+    return ctx
+
+
+def shop_settings(request: Request):
+    """Settings whose data_dir / images_dir point at the current shop."""
+    return current_shop(request).settings
+
+
 def get_session(request: Request) -> Iterator[Session]:
-    with Session(request.app.state.engine) as session:
+    with Session(current_shop(request).engine) as session:
         yield session

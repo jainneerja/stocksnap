@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, or_
 from sqlmodel import Session, select
 
-from ..db import get_session
+from ..db import current_shop, get_session, shop_settings
 from ..models import Item, ItemCreate, ItemRead, ItemUpdate, Sale, StockAdjust, StockMove, utcnow
 from ..services import ledger
 from ..services.images import load_image, resolve_image
@@ -25,10 +25,11 @@ def _sku_prefix(item: Item) -> str:
     return (base[:3] or "ITM").ljust(3, "X")
 
 
-def _auto_sku(item: Item) -> str:
-    """TSH-00012, or TSH-00012-M / CAN-00003-8OZ when the item has a size."""
+def _auto_sku(item: Item, shop_prefix: str = "") -> str:
+    """SIB-00012 with a shop prefix, else category based (TSH-00012); adds the
+    size when there is one (SIB-00012-M, CAN-00003-8OZ)."""
     size = re.sub(r"[^A-Za-z0-9]", "", item.size or "").upper()[:6]
-    return f"{_sku_prefix(item)}-{item.id:05d}" + (f"-{size}" if size else "")
+    return f"{shop_prefix or _sku_prefix(item)}-{item.id:05d}" + (f"-{size}" if size else "")
 
 
 def _get(session: Session, item_id: int) -> Item:
@@ -75,7 +76,7 @@ def _index_image(request: Request, item: Item) -> None:
         item.embedding = item.embedding_model = None
         return
     try:
-        path = resolve_image(request.app.state.settings.images_dir, item.image_path)
+        path = resolve_image(shop_settings(request).images_dir, item.image_path)
     except FileNotFoundError:
         raise HTTPException(400, "Image not found - scan the photo again")
     request.app.state.ai.index_item(item, load_image(path.read_bytes()))
@@ -99,6 +100,7 @@ def list_items(
     batch_id: Optional[int] = None,
     stock: Literal["all", "in", "low", "out"] = "all",
     material: str = "",
+    brand: str = "",
     sort: Literal["newest", "oldest", "name", "price_high", "price_low", "stock_low", "stock_high"] = "newest",
     low_stock: bool = False,  # kept for older clients; same as stock=low
     session: Session = Depends(get_session),
@@ -113,6 +115,7 @@ def list_items(
                 Item.tags.ilike(like),
                 Item.category.ilike(like),
                 Item.material.ilike(like),
+                Item.brand.ilike(like),
                 Item.barcode == q.strip(),
             )
         )
@@ -120,6 +123,8 @@ def list_items(
         stmt = stmt.where(Item.category == category)
     if material:
         stmt = stmt.where(Item.material == material)
+    if brand:
+        stmt = stmt.where(Item.brand == brand)
     if batch_id is not None:
         in_batch = select(StockMove.item_id).where(StockMove.batch_id == batch_id)
         stmt = stmt.where(Item.id.in_(in_batch))
@@ -152,6 +157,7 @@ class Facets(BaseModel):
     stock_value_cents: int
     categories: list[Facet]
     materials: list[Facet]
+    brands: list[Facet]
     batches: list[BatchFacet]
     stock: dict[str, int]  # in / low / out
 
@@ -195,6 +201,7 @@ def facets(session: Session = Depends(get_session)):
         stock_value_cents=sum(max(i.quantity, 0) * i.cost_cents for i in items),
         categories=group(lambda i: i.category),
         materials=group(lambda i: i.material),
+        brands=group(lambda i: i.brand),
         batches=batches,
         stock={
             "in": sum(1 for i in items if i.quantity > 0),
@@ -209,10 +216,10 @@ def export_items(session: Session = Depends(get_session)):
     items = session.exec(select(Item).order_by(Item.category, func.lower(Item.name))).all()
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["sku", "name", "category", "color", "size", "material", "barcode",
+    w.writerow(["sku", "name", "category", "brand", "color", "size", "material", "barcode",
                 "quantity", "cost", "price", "stock_value_at_cost", "tags", "description"])
     for i in items:
-        w.writerow([i.sku, i.name, i.category, i.color, i.size, i.material, i.barcode or "",
+        w.writerow([i.sku, i.name, i.category, i.brand, i.color, i.size, i.material, i.barcode or "",
                     i.quantity, f"{i.cost_cents/100:.2f}", f"{i.price_cents/100:.2f}",
                     f"{max(i.quantity, 0) * i.cost_cents/100:.2f}", i.tags, i.description])
     return StreamingResponse(
@@ -250,8 +257,11 @@ def create_item(data: ItemCreate, request: Request, session: Session = Depends(g
     _index_image(request, item)
     session.add(item)
     session.flush()  # assigns id
+    shop = current_shop(request).info
+    if "low_stock_threshold" not in data.model_fields_set:
+        item.low_stock_threshold = shop.low_stock_default
     if not item.sku:
-        item.sku = _auto_sku(item)
+        item.sku = _auto_sku(item, shop.sku_prefix)
     ledger.move(session, item, data.quantity, "initial")
     session.commit()
     session.refresh(item)
@@ -269,7 +279,7 @@ def update_item(
     for key, val in changes.items():
         setattr(item, key, val)
     if "sku" in changes:
-        item.sku = (item.sku or "").strip().upper() or _auto_sku(item)
+        item.sku = (item.sku or "").strip().upper() or _auto_sku(item, current_shop(request).info.sku_prefix)
     if "barcode" in changes:
         item.barcode = (item.barcode or "").strip() or None
     item.size = (item.size or "").strip()

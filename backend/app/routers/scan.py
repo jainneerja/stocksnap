@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from ..db import get_session
+from ..db import current_shop, get_session, shop_settings
 from ..models import Item, ItemRead
 from ..services.barcode import read_barcode
 from ..services.images import InvalidImage, load_image, resolve_image, save_image
@@ -64,7 +64,7 @@ async def scan(
     request: Request, file: UploadFile = File(...), session: Session = Depends(get_session)
 ):
     img = await _read_upload(file)
-    settings = request.app.state.settings
+    settings = shop_settings(request)
     name = save_image(img, settings.images_dir, settings.max_image_px)
     result = ScanResult(image_path=name)
 
@@ -87,14 +87,14 @@ async def scan(
 @router.post("/photos", response_model=PhotoSaved)
 async def save_photo(request: Request, file: UploadFile = File(...)):
     img = await _read_upload(file)
-    settings = request.app.state.settings
+    settings = shop_settings(request)
     # Keep tag close-ups sharper so small print stays legible.
     return PhotoSaved(image_path=save_image(img, settings.images_dir, max(settings.max_image_px, 1600)))
 
 
 @router.post("/describe")
 def describe(body: DescribeRequest, request: Request):
-    images_dir = request.app.state.settings.images_dir
+    images_dir = shop_settings(request).images_dir
     try:
         paths = [resolve_image(images_dir, body.image_path)]
         if body.tag_image_path:

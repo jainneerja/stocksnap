@@ -14,6 +14,8 @@ export interface Item {
   quantity: number;
   low_stock_threshold: number;
   image_path: string | null;
+  brand: string;
+  attributes: string;
   created_at: string;
   updated_at: string;
 }
@@ -35,6 +37,7 @@ export interface Draft {
   color: string;
   material: string;
   size: string;
+  brand: string;
   price_cents: number | null;
   tags: string[];
 }
@@ -88,6 +91,7 @@ export interface ItemFilters {
   q?: string;
   category?: string;
   material?: string;
+  brand?: string;
   batch_id?: number;
   stock?: StockState;
   sort?: SortKey;
@@ -105,6 +109,7 @@ export interface Facets {
   stock_value_cents: number;
   categories: Facet[];
   materials: Facet[];
+  brands: Facet[];
   batches: { id: number; label: string; items: number }[];
   stock: { in: number; low: number; out: number };
 }
@@ -210,6 +215,7 @@ export interface Preset {
   questions: Question[];
   ai_hint: string;
   per_photo: string;
+  categories: string[];
 }
 
 export interface Detection {
@@ -247,6 +253,7 @@ export interface Group {
   color: string;
   size: string;
   material: string;
+  brand: string;
   cost_cents: number;
   price_cents: number;
   include: boolean;
@@ -274,7 +281,7 @@ export interface Batch {
 }
 
 export type GroupUpdate = Partial<
-  Pick<Group, "name" | "description" | "category" | "tags" | "color" | "size" | "material" | "cost_cents" | "price_cents" | "count_override" | "include">
+  Pick<Group, "name" | "description" | "category" | "tags" | "color" | "size" | "material" | "brand" | "cost_cents" | "price_cents" | "count_override" | "include">
 > & { add_to_existing?: boolean };
 
 export interface StockRow {
@@ -336,3 +343,48 @@ export const bulk = {
 export const stockMonth = (month: string, category = "") =>
   req<StockMonth>(`/api/reports/stock${qs({ month, category })}`);
 export const barcodeUrl = (itemId: number) => `/api/items/${itemId}/barcode.svg`;
+
+// ------------------------------------------------------------------ shops
+
+export type ShopKind = "clothing" | "jewellery" | "soap" | "candle" | "other";
+
+export interface Shop {
+  slug: string;
+  name: string;
+  kind: ShopKind;
+  sku_prefix: string;
+  low_stock_default: number;
+  has_logo: boolean;
+  created_at: string;
+}
+
+export interface ShopInput {
+  name: string;
+  kind: ShopKind;
+  sku_prefix: string;
+  low_stock_default: number;
+}
+
+export const shops = {
+  list: () => req<{ shops: Shop[]; current: string | null; kinds: ShopKind[] }>("/api/shops"),
+  create: (data: ShopInput) => req<Shop>("/api/shops", json("POST", data)),
+  update: (slug: string, data: Partial<ShopInput>) => req<Shop>(`/api/shops/${slug}`, json("PATCH", data)),
+  select: (slug: string) => req<Shop>(`/api/shops/${slug}/select`, { method: "POST" }),
+  suggestPrefix: (name: string) => req<{ sku_prefix: string }>(`/api/shops/suggest-prefix${qs({ name })}`),
+  uploadLogo: (slug: string, file: Blob) => {
+    const fd = new FormData();
+    fd.append("file", file, "logo.png");
+    return req<Shop>(`/api/shops/${slug}/logo`, { method: "POST", body: fd });
+  },
+  removeLogo: (slug: string) => req<Shop>(`/api/shops/${slug}/logo`, { method: "DELETE" }),
+};
+
+export const logoUrl = (shop: Shop, version = 0) => (shop.has_logo ? `/api/shops/${shop.slug}/logo?v=${version}` : "");
+
+export const KIND_LABELS: Record<ShopKind, { label: string; hint: string }> = {
+  clothing: { label: "Clothing", hint: "Tees, hoodies, dresses, kids" },
+  jewellery: { label: "Jewellery", hint: "Earrings, rings, necklaces" },
+  soap: { label: "Soaps & bath", hint: "Bars, bath bombs, butters" },
+  candle: { label: "Candles", hint: "Jars, tins, wax melts" },
+  other: { label: "Something else", hint: "Anything else you sell" },
+};

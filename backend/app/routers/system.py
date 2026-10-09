@@ -11,6 +11,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
 from .. import __version__
+from ..db import current_shop, shop_settings
 from ..services import barcode
 
 router = APIRouter(prefix="/api", tags=["system"])
@@ -34,7 +35,7 @@ def health(request: Request):
 @router.get("/backup")
 def backup(request: Request):
     """Zip of the database (consistent snapshot) plus all item photos."""
-    settings = request.app.state.settings
+    settings = shop_settings(request)
     buf = io.BytesIO()
     with tempfile.TemporaryDirectory() as tmp:
         snap = Path(tmp) / "stocksnap.db"
@@ -48,9 +49,12 @@ def backup(request: Request):
             zf.write(snap, "stocksnap.db")
             for img in settings.images_dir.glob("*.jpg"):
                 zf.write(img, f"images/{img.name}")
+            for extra in ("shop.json", "logo.png"):
+                if (settings.data_dir / extra).is_file():
+                    zf.write(settings.data_dir / extra, extra)
     stamp = datetime.now().strftime("%Y%m%d-%H%M")
     return StreamingResponse(
         iter([buf.getvalue()]),
         media_type="application/zip",
-        headers={"Content-Disposition": f"attachment; filename=stocksnap-backup-{stamp}.zip"},
+        headers={"Content-Disposition": f"attachment; filename=stocksnap-{current_shop(request).info.slug}-backup-{stamp}.zip"},
     )

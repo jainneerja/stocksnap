@@ -173,3 +173,23 @@ def test_bulk_categories_come_from_a_fixed_list(client):
     f = client.get("/api/items/facets").json()
     assert f["batches"][0]["id"] == b["id"] and f["batches"][0]["items"] == n
     assert len(client.get("/api/items", params={"batch_id": b["id"]}).json()) == n
+
+
+def test_clothing_batch_counts_per_design_with_brand_and_size(client):
+    def reader(img, hint):
+        assert "clothing item" in hint
+        return Draft(name="Pink Graphic Tee", category="short sleeve tee", description="x", brand="none")
+
+    client.vision.label_reader = reader
+    b = client.post("/api/batches", json={"preset": "clothing", "answers": {
+        "size": "M", "brand": "Sora in Bloom", "material": "100% organic cotton", "price": "28"}}).json()
+    upload(client, b["id"], soap_tray([0, 0, 0]))   # three identical items on a light surface
+    client.post(f"/api/batches/{b['id']}/describe")
+    g = client.get(f"/api/batches/{b['id']}").json()["groups"]
+    assert len(g) == 1 and g[0]["count"] == 3
+    assert (g[0]["category"], g[0]["size"], g[0]["brand"]) == ("T-shirts", "M", "Sora in Bloom")
+    item = client.post(f"/api/batches/{b['id']}/save").json()[0]
+    assert item["brand"] == "Sora in Bloom" and item["quantity"] == 3 and item["sku"].endswith("-M")
+    f = client.get("/api/items/facets").json()
+    assert f["brands"][0]["name"] == "Sora in Bloom"
+    assert len(client.get("/api/items", params={"brand": "Sora in Bloom"}).json()) == 1

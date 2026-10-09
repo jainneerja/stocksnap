@@ -34,6 +34,7 @@ Reply with JSON only, using exactly these keys:
   "description": "1-2 friendly sentences a shopper would read",
   "color": "main colour(s)",
   "material": "likely material, or empty string if unsure",
+  "brand": "brand or maker name printed on the product or its label, or empty string if none is visible",
   "size": "size exactly as printed on a label or tag (e.g. M, XL, 2T, 8 oz, 16 in), or empty string if none is visible",
   "price": "price printed on a tag as a number (e.g. 24.00), or empty string if none is visible",
   "tags": ["3 to 6 lowercase keywords"]
@@ -48,6 +49,7 @@ class Draft:
     color: str = ""
     material: str = ""
     size: str = ""
+    brand: str = ""
     price_cents: Optional[int] = None  # only when a price tag was readable
     tags: list[str] = field(default_factory=list)
 
@@ -119,6 +121,7 @@ def parse_draft(raw: str) -> Draft:
         color=s("color", 60),
         material=s("material", 60),
         size=_clean_size(s("size", 40)),
+        brand="" if s("brand", 60).lower() in _NO_VALUE else s("brand", 60),
         price_cents=_price_to_cents(data.get("price")),
         tags=tags,
     )

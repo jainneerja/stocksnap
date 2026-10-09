@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
+import { ShopContext, shopCategories } from "../shop";
 import { api, imageUrl, type Item, type ItemInput } from "../api";
 import { toCents, toDollars } from "../format";
 
@@ -10,6 +11,7 @@ export interface FormValues {
   color: string;
   size: string;
   material: string;
+  brand: string;
   barcode: string;
   sku: string;
   cost: string;
@@ -19,13 +21,13 @@ export interface FormValues {
 
 export const emptyForm: FormValues = {
   name: "", category: "", description: "", tags: "", color: "", size: "",
-  material: "", barcode: "", sku: "", cost: "", price: "", quantity: "1",
+  material: "", brand: "", barcode: "", sku: "", cost: "", price: "", quantity: "1",
 };
 
 export function formFromItem(i: Item): FormValues {
   return {
     name: i.name, category: i.category, description: i.description, tags: i.tags,
-    color: i.color, size: i.size, material: i.material, barcode: i.barcode ?? "",
+    color: i.color, size: i.size, material: i.material, brand: i.brand ?? "", barcode: i.barcode ?? "",
     sku: i.sku, cost: toDollars(i.cost_cents), price: toDollars(i.price_cents),
     quantity: String(i.quantity),
   };
@@ -59,11 +61,20 @@ export function ItemForm({
   categories?: string[];
 }) {
   const [v, setV] = useState(initial);
+  const shopState = useContext(ShopContext);
   const [knownCats, setKnownCats] = useState<string[]>(categories ?? []);
+  const [knownBrands, setKnownBrands] = useState<string[]>([]);
   useEffect(() => {
-    if (categories) return;
-    api.facets().then((f) => setKnownCats(f.categories.map((c) => c.name))).catch(() => undefined);
-  }, [categories]);
+    api
+      .facets()
+      .then((f) => {
+        // categories already used in this shop first, then the shop type's standard list
+        const used = categories ?? f.categories.map((c) => c.name);
+        setKnownCats([...new Set([...used, ...shopCategories(shopState)])]);
+        setKnownBrands(f.brands.map((b) => b.name));
+      })
+      .catch(() => undefined);
+  }, [categories, shopState]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [more, setMore] = useState(false);
@@ -113,7 +124,7 @@ export function ItemForm({
     try {
       await onSubmit({
         name: v.name.trim(), category: v.category.trim(), description: v.description.trim(),
-        tags: v.tags.trim(), color: v.color.trim(), size: v.size.trim(), material: v.material.trim(),
+        tags: v.tags.trim(), color: v.color.trim(), size: v.size.trim(), material: v.material.trim(), brand: v.brand.trim(),
         barcode: v.barcode.trim() || null, sku: v.sku.trim() || undefined,
         cost_cents: cost, price_cents: price, quantity: qty,
         image_path: imagePath ?? undefined,
@@ -176,7 +187,7 @@ export function ItemForm({
         </datalist>
       </label>
       <button type="button" className="link" onClick={() => setMore(!more)}>
-        {more ? "Fewer details" : "More details (tags, colour, barcode, SKU)"}
+        {more ? "Fewer details" : "More details (tags, colour, brand, barcode, SKU)"}
       </button>
       {more && (
         <>
@@ -194,6 +205,15 @@ export function ItemForm({
               <input value={v.material} onChange={set("material")} />
             </label>
           </div>
+          <label>
+            Brand / maker <small>(leave blank for your own products)</small>
+            <input value={v.brand} onChange={set("brand")} list="known-brands" />
+            <datalist id="known-brands">
+              {knownBrands.map((b) => (
+                <option key={b} value={b} />
+              ))}
+            </datalist>
+          </label>
           <div className="row2">
             <label>
               Barcode

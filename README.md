@@ -12,11 +12,19 @@ Snap a photo of an item, plus an optional close-up of its size or price tag. Sto
 |---|---|---|---|---|
 | Photo (+ tag close-up) → barcode → "do I already have this?" → AI-drafted listing with size & price | Hundreds of items from a few tray photos: counted, numbered, described, barcode tags printed | Tap a tile or snap a photo to sell; undo mistakes | Search, low-stock flags, ± stepper, CSV export | Profit, expenses, **stock by month** (start, added, sold, end); CSV + print to PDF; full backup |
 
+## Your shops
+
+The first time StockSnap opens, it asks for your **shop or brand name**, what you mainly sell (clothing, jewellery, soaps & bath, candles, or something else), a **SKU prefix** (for example *Sora in Bloom* gives `SIB-00012`), a low-stock level and an optional **logo**. The name and logo appear in the header, on printed price tags and on reports.
+
+You can run **several shops** on one laptop, for example a clothing line and a jewellery line, and switch between them from the header. Each shop is its own folder (`~/.stocksnap/shops/<shop>/`) with its own database, photos and settings, so inventories never mix and a shop can be backed up by copying one folder. Shops keep your data organised; they aren't password-protected.
+
+Items can also carry a **brand / maker** (useful for resellers), which you can filter by and which the AI reads off labels.
+
 ## Bulk add: 500 pieces from a few photos
 
 Wholesale lots arrive in bulk: a bag of 500 machine-made earrings, or a carton of soaps. Photographing them one at a time doesn't work, so StockSnap can take a whole tray at once.
 
-1. **Pick the product type.** Jewellery, soaps & bath, candles, or something else. Each comes with a **photo guide** (which background to use, how far apart to lay things out, how many per photo).
+1. **Pick the product type.** Clothing, jewellery, soaps & bath, candles, or something else. Each comes with a **photo guide** (which background to use, how far apart to lay things out, how many per photo).
 2. **Answer a few questions once per batch.** These cover what the camera can't see: metal, stones, nickel-free, wax type, cost and price. The answers apply to every item in the batch, so the AI never has to guess a metal.
 3. **Photograph the trays.** StockSnap finds every item, draws a **numbered box** on each and counts them. Tap a box to drop anything that isn't an item.
 4. **Local AI describes them in the background.** It works out the type, colour, finish and style, and on packaged goods **reads the label** (name, scent, weight).
@@ -101,7 +109,7 @@ All settings are environment variables with sensible defaults:
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `STOCKSNAP_DATA_DIR` | `~/.stocksnap` | Database and photos |
+| `STOCKSNAP_DATA_DIR` | `~/.stocksnap` | Shops (each with its own database and photos) |
 | `OLLAMA_URL` | `http://localhost:11434` | Local Ollama server |
 | `STOCKSNAP_VISION_MODEL` | `qwen2.5vl:3b` | Any Ollama vision model |
 | `STOCKSNAP_VISION_TIMEOUT` | `300` | Seconds to wait for the model |

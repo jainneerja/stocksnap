@@ -11,6 +11,7 @@ field to the AI / the seller.
 
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass, field
 from typing import Literal, Optional
 
@@ -46,6 +47,9 @@ class Preset:
 JEWELLERY_CATEGORIES = ["Earrings", "Rings", "Necklaces", "Bracelets", "Pendants", "Pins & Brooches",
                         "Anklets", "Hair accessories", "Sets", "Other jewellery"]
 SOAP_CATEGORIES = ["Bar soap", "Liquid soap", "Bath bombs", "Body butter", "Gift sets", "Other bath"]
+CLOTHING_CATEGORIES = ["T-shirts", "Tops & blouses", "Shirts", "Hoodies & sweatshirts", "Sweaters",
+                       "Dresses", "Skirts", "Pants & jeans", "Shorts", "Jackets & coats", "Kids & baby",
+                       "Scarves & accessories", "Other clothing"]
 CANDLE_CATEGORIES = ["Jar candles", "Tin candles", "Pillar candles", "Wax melts", "Other candles"]
 
 # Words a model (or a person) might use -> the category they belong to.
@@ -57,10 +61,23 @@ SYNONYMS = {
     "pendant": "Pendants", "charm": "Pendants", "locket": "Pendants",
     "pin": "Pins & Brooches", "brooch": "Pins & Brooches",
     "anklet": "Anklets",
-    "hair": "Hair accessories", "clip": "Hair accessories", "barrette": "Hair accessories",
+    "hair": "Hair accessories", "clip": "Hair accessories", "barrette": "Hair accessories", "headband": "Hair accessories", "scrunchie": "Hair accessories",
     "set": "Sets",
     "bar soap": "Bar soap", "soap bar": "Bar soap", "liquid": "Liquid soap", "hand wash": "Liquid soap",
     "bath bomb": "Bath bombs", "butter": "Body butter", "gift": "Gift sets",
+    "t-shirt": "T-shirts", "tshirt": "T-shirts", "tee": "T-shirts", "short sleeve": "T-shirts",
+    "long sleeve": "Tops & blouses", "blouse": "Tops & blouses", "top": "Tops & blouses",
+    "tank": "Tops & blouses", "camisole": "Tops & blouses",
+    "shirt": "Shirts", "button-down": "Shirts", "flannel": "Shirts",
+    "hoodie": "Hoodies & sweatshirts", "sweatshirt": "Hoodies & sweatshirts", "crewneck": "Hoodies & sweatshirts",
+    "sweater": "Sweaters", "cardigan": "Sweaters", "jumper": "Sweaters", "pullover": "Sweaters",
+    "dress": "Dresses", "skirt": "Skirts",
+    "jean": "Pants & jeans", "pant": "Pants & jeans", "trouser": "Pants & jeans", "legging": "Pants & jeans",
+    "jogger": "Pants & jeans", "shorts": "Shorts",
+    "jacket": "Jackets & coats", "coat": "Jackets & coats", "blazer": "Jackets & coats", "vest": "Jackets & coats",
+    "onesie": "Kids & baby", "baby": "Kids & baby", "kid": "Kids & baby", "toddler": "Kids & baby",
+    "scarf": "Scarves & accessories", "hat": "Scarves & accessories", "beanie": "Scarves & accessories",
+    "tote": "Scarves & accessories", "bag": "Scarves & accessories", "sock": "Scarves & accessories",
     "jar": "Jar candles", "tin": "Tin candles", "pillar": "Pillar candles", "melt": "Wax melts",
 }
 
@@ -76,9 +93,10 @@ def normalize_category(raw: str, allowed: list[str]) -> str:
     for c in allowed:
         if c.lower() == low or c.lower().rstrip("s") == low.rstrip("s"):
             return c
-    # longest synonym first so "bar soap" beats "bar"
+    # Longest synonym first ("bar soap" beats "bar", "sweatshirt" beats "shirt"),
+    # matched at a word start so "headband" isn't a "band" (ring) and "printed" isn't a "tin".
     for word in sorted(SYNONYMS, key=len, reverse=True):
-        if word in low and SYNONYMS[word] in allowed:
+        if SYNONYMS[word] in allowed and re.search(r"(?<![a-z])" + re.escape(word), low):
             return SYNONYMS[word]
     return allowed[-1]
 
@@ -95,6 +113,33 @@ _price = Question("price", "Selling price per piece ($)", "money", field="price"
 PRESETS: dict[str, Preset] = {
     p.key: p
     for p in [
+        Preset(
+            key="clothing",
+            label="Clothing",
+            mode="identical",
+            background="Plain sheet or card that contrasts with the clothes: white for dark clothes, dark grey or black for light ones.",
+            tips=COMMON_TIPS + [
+                "Fold each piece neatly and lay it flat, front facing up. Don't let pieces overlap.",
+                "One size per batch: answer the Size question below so every piece gets counted in the right size.",
+                "Same design, same size = counted together. Different designs become separate items.",
+            ],
+            per_photo="4-8 folded pieces",
+            categories=CLOTHING_CATEGORIES,
+            questions=[
+                Question("type", "What's in this batch?", "select", ["Mixed"] + CLOTHING_CATEGORIES[:-1],
+                         field="category"),
+                Question("size", "Size (if all the same)", field="size", help="e.g. M, XL, 2T. Do one size per batch."),
+                Question("material", "Fabric (optional)", field="material", help="e.g. 100% organic cotton"),
+                Question("brand", "Brand (optional)", field="brand", help="Leave blank for your own label."),
+                _cost,
+                _price,
+            ],
+            ai_hint=(
+                "The photo shows ONE clothing item laid flat. Say what type it is, its colour, the print "
+                "or graphic, neckline and sleeves, and fabric if obvious. Copy any printed text or size "
+                "label exactly. Don't guess the size."
+            ),
+        ),
         Preset(
             key="jewellery",
             label="Jewellery",
@@ -147,7 +192,8 @@ PRESETS: dict[str, Preset] = {
                          field="category"),
                 Question("weight", "Weight / size, if all the same", help="e.g. 4 oz. Leave blank to read it from labels.",
                          field="size"),
-                Question("maker", "Maker / brand (optional)"),
+                Question("maker", "Maker / brand (optional)", field="brand",
+                         help="Leave blank if it's your own; the AI reads brands off labels."),
                 _cost,
                 _price,
             ],
@@ -187,6 +233,7 @@ PRESETS: dict[str, Preset] = {
             questions=[
                 Question("type", "Category", field="category", help="e.g. Keychains, Stickers"),
                 Question("material", "Material (optional)", field="material"),
+                Question("brand", "Brand / maker (optional)", field="brand"),
                 _cost,
                 _price,
             ],

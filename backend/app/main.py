@@ -17,9 +17,9 @@ from fastapi.staticfiles import StaticFiles
 
 from . import __version__
 from .config import Settings
-from .db import make_engine
-from .routers import batches, items, reports, sales, scan, system
+from .routers import batches, items, reports, sales, scan, shops, system
 from .services.ai import AI
+from .services.shops import ShopRegistry
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
@@ -30,7 +30,7 @@ def create_app(settings: Optional[Settings] = None, ai: Optional[AI] = None) -> 
     settings = settings or Settings()
     app = FastAPI(title="StockSnap", version=__version__)
     app.state.settings = settings
-    app.state.engine = make_engine(settings)
+    app.state.shops = ShopRegistry(settings)  # each shop has its own database + photos
     app.state.ai = ai or AI.from_settings(settings)
 
     # Dev server (Vite on :5173) talks to the API on :8000.
@@ -41,10 +41,8 @@ def create_app(settings: Optional[Settings] = None, ai: Optional[AI] = None) -> 
         allow_headers=["*"],
     )
 
-    for r in (items, scan, batches, sales, reports, system):
+    for r in (shops, items, scan, batches, sales, reports, system):
         app.include_router(r.router)
-
-    app.mount("/images", StaticFiles(directory=settings.images_dir), name="images")
 
     # Serve the built React app, so a single `uvicorn` command runs everything.
     if FRONTEND_DIST.is_dir():

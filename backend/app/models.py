@@ -38,6 +38,7 @@ class ItemBase(SQLModel):
     low_stock_threshold: int = Field(default=2, ge=0)
     image_path: Optional[str] = None
     attributes: str = ""  # JSON object of extra facts, e.g. {"Metal": "Sterling silver"}
+    brand: str = ""  # maker / label of the product (for resellers); the shop's own name lives in shop.json
 
 
 class Item(ItemBase, table=True):
@@ -69,6 +70,7 @@ class ItemUpdate(SQLModel):
     low_stock_threshold: Optional[int] = Field(default=None, ge=0)
     image_path: Optional[str] = None
     attributes: Optional[str] = None
+    brand: Optional[str] = None
 
 
 class ItemRead(ItemBase):
@@ -192,6 +194,7 @@ class BatchGroup(SQLModel, table=True):
     color: str = ""
     size: str = ""
     material: str = ""
+    brand: str = ""
     cost_cents: int = 0
     price_cents: int = 0
     count_override: Optional[int] = None  # e.g. stacked soaps the camera can't count

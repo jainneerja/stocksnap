@@ -190,7 +190,8 @@ def test_parse_draft_tolerates_messy_model_output():
     assert parse_draft("no json here").name == ""
     d = parse_draft('{"name": "Tee", "size": "Size: XL", "price": "$24.50"}')
     assert d.size == "XL" and d.price_cents == 2450
-    d = parse_draft('{"name": "Candle", "size": "none", "price": ""}')
+    d = parse_draft('{"name": "Candle", "size": "none", "price": "", "brand": "n/a"}')
+    assert d.brand == ""
     assert d.size == "" and d.price_cents is None
     assert parse_draft('{"size": "8 oz", "price": 18}').price_cents == 1800
 

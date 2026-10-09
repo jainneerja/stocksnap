@@ -53,11 +53,14 @@ class FakeVision:
 
 @pytest.fixture
 def make_client(tmp_path):
-    def _make(vision_fails: bool = False):
+    def _make(vision_fails: bool = False, with_shop: bool = True):
         settings = Settings(data_dir=tmp_path / "data", matcher="lite", match_threshold=0.9)
         ai = AI(vision=FakeVision(vision_fails), embedder=LiteEmbedder(), match_threshold=0.9)
         c = TestClient(create_app(settings, ai))
         c.vision = ai.vision
+        if with_shop:
+            r = c.post("/api/shops", json={"name": "Test Shop", "kind": "other", "sku_prefix": ""})
+            assert r.status_code == 201, r.text  # also selects it (cookie)
         return c
 
     return _make

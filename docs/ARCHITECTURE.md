@@ -33,6 +33,8 @@
 
 **A stock ledger, not just a quantity column.** Every change goes through `ledger.move()` and writes a `StockMove` (initial, intake, sale, void, adjust). `Item.quantity` stays as a fast cache. The monthly report sums moves before the month (opening) and within it (added, sold, adjusted). Databases from v0.1 are migrated on start: missing columns are added, and the ledger is backfilled from current stock plus past sales.
 
+**One folder per shop.** `ShopRegistry` keeps each shop in `<data_dir>/shops/<slug>/` (`shop.json`, `stocksnap.db`, `images/`, `logo.png`). The current shop is chosen per request from a cookie (or `?shop=`), so photos, CSV downloads and API calls all follow the shop the user picked, with no extra parameters in the UI. Engines are cached per shop, and background AI jobs are keyed by shop and batch. Separate files were chosen over a `shop_id` column: inventories can't leak into each other, backups are a single folder, and the existing queries didn't change.
+
 **Local-first AI behind small interfaces.** `OllamaVision` and `Embedder` are the only places that touch models. You can swap the model with an environment variable, and tests inject fakes. Ollama was chosen because it installs with one click on Windows, Mac and Linux, handles GPU and CPU automatically, and hosts many open vision models.
 
 **Re-identification over generic detection.** Generic detectors such as YOLO or COCO know "cup" and "person", but they can't tell your lavender candle apart from your cedar candle. Embedding each saved item's photo and comparing new photos against *your own catalogue* is what makes "snap to sell" and "snap to restock" work.

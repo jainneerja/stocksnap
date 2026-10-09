@@ -3,6 +3,7 @@ import { api, imageUrl, type Facets, type Item, type SortKey, type StockState } 
 import { CategoryChips } from "../components/CategoryChips";
 import { formFromItem, ItemForm } from "../components/ItemForm";
 import { money } from "../format";
+import { useShop } from "../shop";
 
 const SORTS: { key: SortKey; label: string }[] = [
   { key: "newest", label: "Newest first" },
@@ -20,15 +21,19 @@ interface View {
   stock: StockState;
   sort: SortKey;
   batch: number | "";
+  brand: string;
   layout: "grid" | "list";
 }
 
-const DEFAULT_VIEW: View = { q: "", category: "", stock: "all", sort: "newest", batch: "", layout: "grid" };
+const DEFAULT_VIEW: View = { q: "", category: "", stock: "all", sort: "newest", batch: "", brand: "", layout: "grid" };
+
+// One saved view per shop.
+const viewKey = (slug: string) => `stocksnap.inventoryView.${slug}`;
 
 // Remember filters between visits (per browser). Storage can be unavailable, so never rely on it.
-function loadView(): View {
+function loadView(slug: string): View {
   try {
-    const saved = JSON.parse(localStorage.getItem("stocksnap.inventoryView") || "{}");
+    const saved = JSON.parse(localStorage.getItem(viewKey(slug)) || "{}");
     return { ...DEFAULT_VIEW, ...saved, q: "" };
   } catch {
     return DEFAULT_VIEW;
@@ -36,7 +41,8 @@ function loadView(): View {
 }
 
 export function InventoryPage({ toast }: { toast: (msg: string) => void }) {
-  const [view, setView] = useState<View>(loadView);
+  const { shop } = useShop();
+  const [view, setView] = useState<View>(() => loadView(shop.slug));
   const [items, setItems] = useState<Item[]>([]);
   const [facets, setFacets] = useState<Facets | null>(null);
   const [editing, setEditing] = useState<Item | null>(null);
@@ -48,11 +54,11 @@ export function InventoryPage({ toast }: { toast: (msg: string) => void }) {
     try {
       const { q: _q, ...rest } = view;
       void _q;
-      localStorage.setItem("stocksnap.inventoryView", JSON.stringify(rest));
+      localStorage.setItem(viewKey(shop.slug), JSON.stringify(rest));
     } catch {
       /* private mode etc. */
     }
-  }, [view]);
+  }, [view, shop.slug]);
 
   const load = useCallback(async () => {
     const [its, f] = await Promise.all([
@@ -62,13 +68,14 @@ export function InventoryPage({ toast }: { toast: (msg: string) => void }) {
         stock: view.stock,
         sort: view.sort,
         batch_id: view.batch || undefined,
+        brand: view.brand,
       }),
       api.facets(),
     ]);
     setItems(its);
     setFacets(f);
     setLoading(false);
-  }, [view.q, view.category, view.stock, view.sort, view.batch]);
+  }, [view.q, view.category, view.stock, view.sort, view.batch, view.brand]);
 
   useEffect(() => {
     const t = setTimeout(() => load().catch((e) => toast(e.message)), 150);
@@ -115,7 +122,7 @@ export function InventoryPage({ toast }: { toast: (msg: string) => void }) {
       </section>
     );
 
-  const filtered = view.q || view.category || view.stock !== "all" || view.batch !== "";
+  const filtered = view.q || view.category || view.stock !== "all" || view.batch !== "" || view.brand;
   const units = items.reduce((s, i) => s + Math.max(i.quantity, 0), 0);
   const value = items.reduce((s, i) => s + Math.max(i.quantity, 0) * i.cost_cents, 0);
 
@@ -125,7 +132,7 @@ export function InventoryPage({ toast }: { toast: (msg: string) => void }) {
         <h1>Inventory</h1>
         {facets && (
           <span className="muted">
-            {facets.total_items} items · {facets.total_units} units · {money(facets.stock_value_cents)} at cost
+            {facets.total_items} {facets.total_items === 1 ? "item" : "items"} · {facets.total_units} units · {money(facets.stock_value_cents)} at cost
           </span>
         )}
       </div>
@@ -164,6 +171,16 @@ export function InventoryPage({ toast }: { toast: (msg: string) => void }) {
             {facets.batches.map((b) => (
               <option key={b.id} value={b.id}>
                 Batch {b.label} ({b.items})
+              </option>
+            ))}
+          </select>
+        )}
+        {facets && facets.brands.length > 0 && (
+          <select aria-label="Brand" value={view.brand} onChange={(e) => set({ brand: e.target.value })}>
+            <option value="">All brands</option>
+            {facets.brands.map((b) => (
+              <option key={b.name} value={b.name}>
+                {b.name} ({b.items})
               </option>
             ))}
           </select>
@@ -234,6 +251,7 @@ export function InventoryPage({ toast }: { toast: (msg: string) => void }) {
                 <span className="muted">
                   {it.size && <span className="size-chip">{it.size}</span>}
                   {it.category && `${it.category} · `}
+                  {it.brand && `${it.brand} · `}
                   {it.sku} · {money(it.price_cents)}
                 </span>
               </button>
