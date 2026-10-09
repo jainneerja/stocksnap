@@ -176,8 +176,8 @@ export const api = {
     fd.append("file", file, "tag.jpg");
     return req<{ image_path: string }>("/api/photos", { method: "POST", body: fd });
   },
-  describe: (image_path: string, tag_image_path?: string) =>
-    req<Draft>("/api/describe", json("POST", { image_path, tag_image_path })),
+  describe: (image_path: string, tag_image_path?: string, hint?: string) =>
+    req<Draft>("/api/describe", json("POST", { image_path, tag_image_path, hint: hint ?? "" })),
 
   sell: (item_id: number, quantity = 1, unit_price_cents?: number) =>
     req<Sale>("/api/sales", json("POST", { item_id, quantity, unit_price_cents })),
@@ -332,6 +332,9 @@ export const bulk = {
   toggle: (id: number, detId: number, include: boolean) =>
     req<Batch>(`/api/batches/${id}/detections/${detId}`, json("PATCH", { include })),
   describe: (id: number) => req<Batch>(`/api/batches/${id}/describe`, { method: "POST" }),
+  // Clear the AI's names/descriptions and run again, telling it what the items are.
+  redescribe: (id: number, note: string) =>
+    req<Batch>(`/api/batches/${id}/describe`, json("POST", { redo: true, note })),
   updateGroup: (id: number, groupId: number, data: GroupUpdate) =>
     req<Batch>(`/api/batches/${id}/groups/${groupId}`, json("PATCH", data)),
   bulkEdit: (id: number, data: { price_cents?: number; cost_cents?: number; category?: string }) =>
@@ -354,6 +357,7 @@ export interface Shop {
   kind: ShopKind;
   sku_prefix: string;
   low_stock_default: number;
+  ai_context: string;
   has_logo: boolean;
   created_at: string;
 }
@@ -363,6 +367,7 @@ export interface ShopInput {
   kind: ShopKind;
   sku_prefix: string;
   low_stock_default: number;
+  ai_context: string;
 }
 
 export const shops = {

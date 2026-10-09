@@ -13,14 +13,14 @@ from __future__ import annotations
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from ..db import current_shop, get_session, shop_settings
 from ..models import Item, ItemRead
 from ..services.barcode import read_barcode
 from ..services.images import InvalidImage, load_image, resolve_image, save_image
-from ..services.vision import VisionUnavailable
+from ..services.vision import VisionUnavailable, seller_context
 
 router = APIRouter(prefix="/api", tags=["scan"])
 
@@ -43,6 +43,7 @@ class ScanResult(BaseModel):
 class DescribeRequest(BaseModel):
     image_path: str
     tag_image_path: Optional[str] = None  # close-up of label / hang tag
+    hint: str = Field(default="", max_length=300)  # seller's own words: "what is it?"
 
 
 class PhotoSaved(BaseModel):
@@ -102,7 +103,9 @@ def describe(body: DescribeRequest, request: Request):
     except FileNotFoundError:
         raise HTTPException(404, "Image not found")
     try:
-        draft = request.app.state.ai.vision.describe([load_image(p.read_bytes()) for p in paths])
+        seller = seller_context(current_shop(request).info.ai_context, body.hint)
+        images = [load_image(p.read_bytes()) for p in paths]
+        draft = request.app.state.ai.vision.describe(images, seller=seller)
     except VisionUnavailable:
         # Graceful fallback: the user just types the details in.
         raise HTTPException(

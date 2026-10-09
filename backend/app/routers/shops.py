@@ -24,6 +24,7 @@ class ShopCreate(BaseModel):
     kind: str = "other"
     sku_prefix: Optional[str] = None
     low_stock_default: int = Field(default=2, ge=0, le=1000)
+    ai_context: str = Field(default="", max_length=400)
 
 
 class ShopUpdate(BaseModel):
@@ -31,6 +32,7 @@ class ShopUpdate(BaseModel):
     kind: Optional[str] = None
     sku_prefix: Optional[str] = None
     low_stock_default: Optional[int] = Field(default=None, ge=0, le=1000)
+    ai_context: Optional[str] = Field(default=None, max_length=400)
 
 
 class ShopList(BaseModel):
@@ -67,7 +69,8 @@ def prefix_for(name: str = ""):
 
 @router.post("/api/shops", response_model=ShopInfo, status_code=201)
 def create_shop(data: ShopCreate, request: Request, response: Response):
-    info = request.app.state.shops.create(data.name, data.kind, data.sku_prefix, data.low_stock_default)
+    info = request.app.state.shops.create(data.name, data.kind, data.sku_prefix, data.low_stock_default,
+                                         data.ai_context)
     request.app.state.shops.context(info)  # creates the database now, not on first use
     _select(response, info.slug)
     return info

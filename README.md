@@ -39,6 +39,16 @@ Two counting modes:
 
 **Photo setup:** use a **matte black** background (velvet, felt, foam board) for gold, silver, pearls and bright items, and **plain white card** for dark items. Shoot in daylight with no flash, phone straight overhead, with a finger-width gap between items. Earring pairs should touch, so each pair counts as one.
 
+## Tell the AI what you sell
+
+A small vision model only sees shapes and colours, so it can call a round embroidered outfit a "hat". You can tell it what your items really are, in your own words, in three places:
+
+- **Shop settings → Describe what you sell**: read before every photo in that shop.
+- **Bulk → What are these?**: applies to one batch. If the names come back wrong anyway, use **Redo names** on the review screen. Prices and counts are kept.
+- **Add → What is it?**: for a single item, with **Ask AI again** on the form.
+
+The note is given to the model as the seller's word, which it must not contradict. It is never saved on your items.
+
 ## Listing photos (beta)
 
 The **Photos** tab turns one product photo into a set of marketplace images: a main image on pure white (2000×2000, product filling about 85% of the frame, as Amazon asks), a soft-shadow shot, a colour backdrop, a tabletop shot, a close-up of the most detailed area, and a details card with your title and bullet points. Download them one by one or as a ZIP named `SKU.MAIN.jpg`, `SKU.PT01.jpg`, and so on.

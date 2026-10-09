@@ -130,6 +130,28 @@ def parse_draft(raw: str) -> Draft:
     return draft
 
 
+def seller_context(*parts: str) -> str:
+    """Join shop-level and item-level notes from the seller, skipping blanks."""
+    return " ".join(p.strip().rstrip(".") + "." for p in parts if p and p.strip())
+
+
+def build_prompt(hint: str = "", seller: str = "") -> str:
+    prompt = PROMPT
+    if seller:
+        # Small vision models guess from shape alone ("round embroidered thing = hat").
+        # The seller knows what they sell, so their words decide what the item IS;
+        # the photo only adds colour, pattern and details.
+        prompt += (
+            f"\n\nIMPORTANT - the seller says: {seller}\n"
+            "Treat this as true. Use the seller's words for what the item is, in the name and the "
+            "description, even if it looks like something else to you. Only describe what you can see "
+            "(colours, pattern, embellishments, shape) on top of that. Do not contradict the seller."
+        )
+    if hint:
+        prompt += f"\n\nAbout this product: {hint}"
+    return prompt
+
+
 class OllamaVision:
     def __init__(self, base_url: str, model: str, timeout_s: float = 120):
         self.base_url = base_url.rstrip("/")
@@ -155,12 +177,13 @@ class OllamaVision:
                 "detail": "Ollama is not running (install from ollama.com, then `ollama serve`)",
             }
 
-    def describe(self, images: list[Image.Image], hint: str = "") -> Draft:
+    def describe(self, images: list[Image.Image], hint: str = "", seller: str = "") -> Draft:
         """images[0] = product photo; optional images[1] = label/tag close-up.
-        `hint` adds product-specific guidance (e.g. from a bulk-intake preset)."""
+        `hint` adds product-specific guidance (e.g. from a bulk-intake preset);
+        `seller` is what the seller says the item is, which wins over the model's guess."""
         payload = {
             "model": self.model,
-            "prompt": PROMPT + (f"\n\nAbout this product: {hint}" if hint else ""),
+            "prompt": build_prompt(hint, seller),
             # Tag close-ups keep more pixels so small print stays readable.
             "images": [_to_b64_jpeg(im, 768 if i == 0 else 1024) for i, im in enumerate(images)],
             "format": "json",

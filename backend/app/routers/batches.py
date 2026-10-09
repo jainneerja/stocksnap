@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Request, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from ..db import current_shop, get_session, shop_settings
@@ -237,17 +237,30 @@ def update_detection(batch_id: int, det_id: int, body: DetectionUpdate, request:
     return batch_out(session, b, shop_settings(request))
 
 
+class DescribeBody(BaseModel):
+    # redo=True clears the AI's names/descriptions and runs again with `note`
+    # (the seller's own words for what the items are).
+    redo: bool = False
+    note: str = Field(default="", max_length=300)
+
+
 @router.post("/batches/{batch_id}/describe", response_model=BatchOut)
-def describe(batch_id: int, request: Request, tasks: BackgroundTasks, session: Session = Depends(get_session)):
+def describe(batch_id: int, request: Request, tasks: BackgroundTasks,
+             body: Optional[DescribeBody] = None, session: Session = Depends(get_session)):
     b = _get_batch(session, batch_id)
     if b.status == "saved":
         raise HTTPException(409, "This batch is already saved.")
+    shop = current_shop(request)
+    if body and body.redo:
+        if bulk.is_running(shop.settings, batch_id):
+            raise HTTPException(409, "Still describing items - wait a moment.")
+        bulk.reset_descriptions(session, b, body.note)
     b.status = "describing"
     session.add(b)
     session.commit()
-    shop = current_shop(request)
     if bulk.start_describe(shop.settings, batch_id):
-        tasks.add_task(bulk.describe_batch, shop.engine, request.app.state.ai, shop.settings, batch_id)
+        tasks.add_task(bulk.describe_batch, shop.engine, request.app.state.ai, shop.settings, batch_id,
+                       shop.info.ai_context)
     return batch_out(session, b, shop_settings(request))
 
 

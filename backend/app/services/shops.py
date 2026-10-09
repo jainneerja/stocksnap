@@ -38,6 +38,7 @@ class ShopInfo(BaseModel):
     kind: str = "other"  # one of SHOP_KINDS; picks default categories / bulk type
     sku_prefix: str = ""  # e.g. "SIB" -> SIB-00012; empty = category based (TSH-00012)
     low_stock_default: int = Field(default=2, ge=0)
+    ai_context: str = Field(default="", max_length=400)  # "what do you sell?", given to the AI
     has_logo: bool = False
     created_at: str = ""
 
@@ -106,7 +107,7 @@ class ShopRegistry:
     # ------------------------------------------------------------ changes
 
     def create(self, name: str, kind: str = "other", sku_prefix: Optional[str] = None,
-               low_stock_default: int = 2) -> ShopInfo:
+               low_stock_default: int = 2, ai_context: str = "") -> ShopInfo:
         base = slugify(name)
         slug, n = base, 2
         with self._lock:
@@ -118,6 +119,7 @@ class ShopRegistry:
                 kind=kind if kind in SHOP_KINDS else "other",
                 sku_prefix=clean_prefix(suggest_prefix(name) if sku_prefix is None else sku_prefix),
                 low_stock_default=low_stock_default,
+                ai_context=(ai_context or "").strip()[:400],
                 created_at=datetime.now(timezone.utc).isoformat(),
             )
             self._write(info)

@@ -26,16 +26,18 @@ class FakeVision:
         self.fail = fail
         self.calls: list[int] = []  # number of images per call
         self.hints: list[str] = []
+        self.sellers: list[str] = []
         self.label_reader = None  # optional fn(img, hint) -> Draft, set by tests
 
     def status(self):
         return {"available": not self.fail, "model": self.model, "detail": "fake"}
 
-    def describe(self, images, hint=""):
+    def describe(self, images, hint="", seller=""):
         if self.fail:
             raise VisionUnavailable("down")
         self.calls.append(len(images))
         self.hints.append(hint)
+        self.sellers.append(seller)
         if self.label_reader:
             return self.label_reader(images[0], hint)
         has_tag = len(images) > 1

@@ -21,6 +21,9 @@ export function ScanPage({ toast }: { toast: (msg: string) => void }) {
   const [stage, setStage] = useState<Stage>({ kind: "start" });
   const [form, setForm] = useState<FormValues>(emptyForm);
   const [aiBusy, setAiBusy] = useState(false);
+  // The seller's own words for what the item is. Kept between items: people
+  // usually add several of the same kind in a row.
+  const [hint, setHint] = useState("");
   const [error, setError] = useState("");
 
   async function onPhoto(file: File) {
@@ -59,10 +62,13 @@ export function ScanPage({ toast }: { toast: (msg: string) => void }) {
     setForm(start);
     setStage({ kind: "new", scan, base, tagPath });
     if (!scan.image_path) return; // manual entry, nothing for the AI to look at
+    runAi(scan, base, tagPath, hint);
+  }
 
+  function runAi(scan: ScanResult, base: Item | undefined, tagPath: string | undefined, note: string) {
     setAiBusy(true);
     api
-      .describe(scan.image_path, tagPath)
+      .describe(scan.image_path, tagPath, note.trim())
       .then((d) =>
         setForm((f) => {
           const price = d.price_cents ? toDollars(d.price_cents) : "";
@@ -103,6 +109,11 @@ export function ScanPage({ toast }: { toast: (msg: string) => void }) {
             Snap a photo of an item. StockSnap reads any barcode, checks if you already have it, and drafts a
             listing with local AI. Nothing leaves this computer.
           </p>
+          <label className="hint-field">
+            What is it? <span className="muted small">(optional, tells the AI)</span>
+            <input value={hint} onChange={(e) => setHint(e.target.value)} maxLength={300}
+              placeholder="e.g. embroidered outfit for a small statue" />
+          </label>
           <PhotoButton label="Take a photo" onPhoto={onPhoto} />
           <button className="link" onClick={() => openForm(NO_PHOTO)}>
             or add an item without a photo
@@ -187,6 +198,19 @@ export function ScanPage({ toast }: { toast: (msg: string) => void }) {
       {stage.kind === "new" && (
         <div>
           <h2>{stage.base ? `New size of ${stage.base.name}` : "New item"}</h2>
+          {stage.scan.image_path && !stage.base && (
+            <form
+              className="ai-redo"
+              onSubmit={(e) => {
+                e.preventDefault();
+                runAi(stage.scan, stage.base, stage.tagPath, hint);
+              }}
+            >
+              <input value={hint} onChange={(e) => setHint(e.target.value)} maxLength={300}
+                aria-label="Tell the AI what this is" placeholder="AI got it wrong? Tell it what this is" />
+              <button className="btn btn-secondary" disabled={aiBusy || !hint.trim()}>Ask AI again</button>
+            </form>
+          )}
           <ItemForm
             initial={form}
             imagePath={stage.scan.image_path || null}

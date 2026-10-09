@@ -342,3 +342,12 @@ label.inline select { width: auto; }
 .lab-thumb { font: inherit; border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 0 0 6px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px; overflow: hidden; flex: none; }
 .lab-thumb img { width: 110px; height: 110px; object-fit: cover; }
 .tabs button { font-size: .92rem; }
+
+/* Telling the AI what an item is */
+.hint-field { display: block; text-align: left; max-width: 420px; margin: 0 auto 14px; font-weight: 600; }
+.hint-field input { margin-top: 6px; font-weight: 400; }
+.ai-redo { display: flex; gap: 8px; margin: 8px 0; }
+.ai-redo input { flex: 1; min-width: 0; }
+.ai-redo .btn { white-space: nowrap; }
+.ai-redo-box { background: var(--brand-soft); border-radius: 12px; padding: 10px 12px; margin: 10px 0; }
+.ai-redo-box summary { cursor: pointer; font-weight: 600; }

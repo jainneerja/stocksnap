@@ -107,6 +107,13 @@ COMMON_TIPS = [
     "Leave about a finger-width gap between items. Touching items are counted as one.",
 ]
 
+# Free-text note passed to the AI only (not stored on items). Lets the seller say
+# what the pieces really are when the model can't tell from the photo alone.
+_about = Question(
+    "about", "What are these? (tells the AI)", field="ai_note",
+    help="Optional. Use your own words, e.g. \"doll outfits\", \"pet bandanas\", \"dresses for small statues\".",
+)
+
 _cost = Question("cost", "Cost per piece ($)", "money", field="cost", help="What you paid. Used for profit.")
 _price = Question("price", "Selling price per piece ($)", "money", field="price", help="You can change it per item later.")
 
@@ -126,6 +133,7 @@ PRESETS: dict[str, Preset] = {
             per_photo="4-8 folded pieces",
             categories=CLOTHING_CATEGORIES,
             questions=[
+                _about,
                 Question("type", "What's in this batch?", "select", ["Mixed"] + CLOTHING_CATEGORIES[:-1],
                          field="category"),
                 Question("size", "Size (if all the same)", field="size", help="e.g. M, XL, 2T. Do one size per batch."),
@@ -153,6 +161,7 @@ PRESETS: dict[str, Preset] = {
             per_photo="20-30 small pieces (studs, rings, charms) or about 6 necklaces",
             categories=JEWELLERY_CATEGORIES,
             questions=[
+                _about,
                 Question("type", "What's on this tray?", "select",
                          ["Mixed"] + JEWELLERY_CATEGORIES[:-1],
                          field="category"),
@@ -187,6 +196,7 @@ PRESETS: dict[str, Preset] = {
             per_photo="15-25 bars or boxes",
             categories=SOAP_CATEGORIES,
             questions=[
+                _about,
                 Question("type", "What's in this batch?", "select",
                          ["Mixed"] + SOAP_CATEGORIES[:-1],
                          field="category"),
@@ -212,6 +222,7 @@ PRESETS: dict[str, Preset] = {
             per_photo="10-20 candles",
             categories=CANDLE_CATEGORIES,
             questions=[
+                _about,
                 Question("wax", "Wax", "select",
                          ["Soy", "Coconut", "Beeswax", "Paraffin", "Blend", "Not sure"], field="material"),
                 Question("size", "Size, if all the same", help="e.g. 8 oz", field="size"),
@@ -231,6 +242,7 @@ PRESETS: dict[str, Preset] = {
             tips=COMMON_TIPS,
             per_photo="10-30 items, depending on size",
             questions=[
+                _about,
                 Question("type", "Category", field="category", help="e.g. Keychains, Stickers"),
                 Question("material", "Material (optional)", field="material"),
                 Question("brand", "Brand / maker (optional)", field="brand"),
@@ -259,9 +271,15 @@ def resolve_answers(preset: Preset, answers: dict[str, str]) -> tuple[dict, dict
             except ValueError:
                 pass
             continue
+        if q.field == "ai_note":
+            continue  # for the AI prompt only, see ai_note()
         unsure = raw.lower().startswith(UNSURE_PREFIXES)
         if q.field and not unsure:
             fields[q.field] = raw
         elif not q.field and raw.lower() not in ("not sure", "mixed / not sure"):
             attrs[q.label.replace(" (optional)", "").rstrip("?")] = raw
     return fields, attrs
+
+
+def ai_note(answers: dict[str, str]) -> str:
+    return str(answers.get("about", "") or "").strip()[:300]

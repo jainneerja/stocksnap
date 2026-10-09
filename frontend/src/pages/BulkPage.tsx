@@ -257,6 +257,7 @@ function BatchView({
     .filter(([, v]) => v && !/^(mixed|not sure|none)/i.test(v))
     .map(([k, v]) => {
       const q = preset?.questions.find((qq) => qq.key === k);
+      if (k === "about") return [k, `“${v}”`];
       if (q?.kind === "money") return [k, `${q.field === "cost" ? "Cost" : "Price"} ${money(toCents(v) ?? 0)}`];
       return [k, v];
     });
@@ -331,6 +332,9 @@ function BatchView({
             </div>
           )}
           {!aiReady && <div className="notice">Local AI is off, so type a name for each item (or leave blank for "{b.preset_label} #number").</div>}
+          {aiReady && !working && b.progress.done > 0 && (
+            <RedoAi batch={b} onChange={setB} toast={toast} />
+          )}
           <BulkPrice batch={b} onChange={setB} />
           <div className="review">
             {b.groups.map((g) => (
@@ -435,9 +439,17 @@ function GroupRow({
   const [count, setCount] = useState(String(g.count));
   const [open, setOpen] = useState(false);
 
-  // When the AI fills a row in, show it unless the seller already typed something.
-  useEffect(() => setName((n) => n || g.name), [g.name]);
-  useEffect(() => setDesc((d) => d || g.description), [g.description]);
+  // When the AI fills a row in (or rewrites it after "Redo names"), show it
+  // unless the seller has typed their own text.
+  const served = useRef({ name: g.name, desc: g.description });
+  useEffect(() => {
+    setName((n) => (!n || n === served.current.name ? g.name : n));
+    served.current.name = g.name;
+  }, [g.name]);
+  useEffect(() => {
+    setDesc((d) => (!d || d === served.current.desc ? g.description : d));
+    served.current.desc = g.description;
+  }, [g.description]);
   useEffect(() => setPrice(toDollars(g.price_cents)), [g.price_cents]);
   useEffect(() => setCount(String(g.count)), [g.count]);
 
@@ -570,5 +582,41 @@ function Labels({ batch, items, onDone }: { batch: Batch; items: Item[]; onDone:
         ))}
       </div>
     </section>
+  );
+}
+
+// The AI only sees shapes and colours, so it can call a dress a hat. The seller
+// says what the items really are and the AI writes every name again.
+function RedoAi({ batch, onChange, toast }: { batch: Batch; onChange: (b: Batch) => void; toast: (m: string) => void }) {
+  const [note, setNote] = useState(batch.answers.about ?? "");
+  const [busy, setBusy] = useState(false);
+  return (
+    <details className="ai-redo-box" open={!batch.answers.about}>
+      <summary>AI named these wrong? Tell it what they are</summary>
+      <form
+        className="ai-redo"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setBusy(true);
+          try {
+            onChange(await bulk.redescribe(batch.id, note));
+          } catch (err) {
+            toast((err as Error).message);
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <input
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          maxLength={300}
+          aria-label="What are these items?"
+          placeholder="e.g. round embroidered outfits for small statues"
+        />
+        <button className="btn btn-secondary" disabled={busy || !note.trim()}>Redo names</button>
+      </form>
+      <small className="muted">Rewrites names and descriptions for this batch. Prices and counts stay.</small>
+    </details>
   );
 }

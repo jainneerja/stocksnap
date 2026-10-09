@@ -25,6 +25,7 @@ export function ShopSetupPage({
     kind: existing?.kind ?? "clothing",
     sku_prefix: existing?.sku_prefix ?? "",
     low_stock_default: existing?.low_stock_default ?? 2,
+    ai_context: existing?.ai_context ?? "",
   });
   const [prefixTouched, setPrefixTouched] = useState(!!existing);
   const [logo, setLogo] = useState<File | null>(null);
@@ -112,6 +113,18 @@ export function ShopSetupPage({
           ))}
           <small className="muted">Sets your categories and the first bulk-add type. You can still add anything.</small>
         </fieldset>
+
+        <label>
+          Describe what you sell <span className="muted small">(optional, helps the AI)</span>
+          <textarea
+            rows={2}
+            maxLength={400}
+            value={v.ai_context}
+            onChange={(e) => setV({ ...v, ai_context: e.target.value })}
+            placeholder="In your own words, e.g. Hand-embroidered outfits and crowns for small statues"
+          />
+          <small>The AI reads this before every photo, so it names things the way you would.</small>
+        </label>
 
         <div className="row2">
           <label>

@@ -21,9 +21,9 @@ from . import ledger
 from .ai import AI
 from .images import load_image, resolve_image, save_image
 from .matcher import rank
-from .presets import PRESETS, normalize_category, resolve_answers
+from .presets import PRESETS, ai_note, normalize_category, resolve_answers
 from .segment import crop, find_pieces
-from .vision import VisionUnavailable
+from .vision import VisionUnavailable, seller_context
 
 log = logging.getLogger(__name__)
 
@@ -143,7 +143,33 @@ def start_describe(settings: Settings, batch_id: int) -> bool:
     return True
 
 
-def describe_batch(engine, ai: AI, settings: Settings, batch_id: int) -> None:
+AI_TEXT_FIELDS = ("name", "description", "category", "tags", "color", "size", "material", "brand")
+
+
+def reset_descriptions(session: Session, batch: Batch, note: str) -> None:
+    """'Redo with AI': store the seller's note and clear what the AI wrote so the
+    next describe run starts fresh. Prices, costs and counts are kept; batch
+    answers (e.g. size or metal for the whole batch) are re-applied."""
+    answers = answers_of(batch)
+    if note.strip():
+        answers["about"] = note.strip()[:300]
+    else:
+        answers.pop("about", None)
+    batch.answers = json.dumps(answers)
+    fields, _ = resolve_answers(preset_of(batch), answers)
+    for g in session.exec(select(BatchGroup).where(BatchGroup.batch_id == batch.id)).all():
+        if g.item_id:
+            continue  # already in inventory
+        for f in AI_TEXT_FIELDS:
+            setattr(g, f, fields.get(f, ""))
+        g.existing_item_id = None
+        g.status = "pending"
+        session.add(g)
+    session.add(batch)
+    session.commit()
+
+
+def describe_batch(engine, ai: AI, settings: Settings, batch_id: int, shop_context: str = "") -> None:
     """Runs in the background. One AI call per group, committed one at a time
     so the UI can show progress."""
     try:
@@ -156,6 +182,7 @@ def describe_batch(engine, ai: AI, settings: Settings, batch_id: int) -> None:
             hint = preset.ai_hint + (f" The seller says: {context}." if context else "")
             if preset.categories and "category" not in fields:
                 hint += " The category MUST be one of: " + ", ".join(preset.categories) + "."
+            seller = seller_context(shop_context, ai_note(answers))
 
             pending = session.exec(
                 select(BatchGroup).where(
@@ -168,7 +195,7 @@ def describe_batch(engine, ai: AI, settings: Settings, batch_id: int) -> None:
                 det = session.get(Detection, group.rep_detection_id)
                 try:
                     img = load_image(resolve_image(settings.images_dir, det.crop_path).read_bytes())
-                    draft = ai.vision.describe([img], hint=hint)
+                    draft = ai.vision.describe([img], hint=hint, seller=seller)
                 except (VisionUnavailable, FileNotFoundError) as exc:
                     log.warning("describe failed for group %s: %s", group.id, exc)
                     group.status = "failed"
