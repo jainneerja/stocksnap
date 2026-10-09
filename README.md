@@ -39,6 +39,28 @@ Two counting modes:
 
 **Photo setup:** use a **matte black** background (velvet, felt, foam board) for gold, silver, pearls and bright items, and **plain white card** for dark items. Shoot in daylight with no flash, phone straight overhead, with a finger-width gap between items. Earring pairs should touch, so each pair counts as one.
 
+## Listing photos (beta)
+
+The **Photos** tab turns one product photo into a set of marketplace images: a main image on pure white (2000×2000, product filling about 85% of the frame, as Amazon asks), a soft-shadow shot, a colour backdrop, a tabletop shot, a close-up of the most detailed area, and a details card with your title and bullet points. Download them one by one or as a ZIP named `SKU.MAIN.jpg`, `SKU.PT01.jpg`, and so on.
+
+**The product is always the real photo.** The AI cuts it out and paints only the background around it. It never redraws the product, so colours, embroidery and print stay true. Back views, side views and the package contents still need their own photos.
+
+| Step | Model | Licence | Speed on a laptop CPU |
+|---|---|---|---|
+| Cut the product out | **rembg** with `isnet-general-use` (OpenCV GrabCut if rembg isn't installed) | MIT / Apache-2.0 | ~2 s per photo |
+| White, shadow, backdrop, tabletop, close-up, card | Pillow + OpenCV | open source | under 1 s each |
+| AI scene backgrounds (optional) | **SD-Turbo** via diffusers | Stability AI Community Licence (check before commercial use) | ~10–60 s per scene on CPU, 1–2 s on a GPU |
+
+Install the extras (in Git Bash on Windows, with the venv active):
+
+```bash
+cd backend
+python -m pip install torch --index-url https://download.pytorch.org/whl/cpu   # skip if you have an NVIDIA GPU build
+python -m pip install -r requirements-imagelab.txt
+```
+
+The models download the first time you use them (about 180 MB for the cut-out model and about 2 GB for SD-Turbo), and after that everything runs offline. Without the extras, the Photos tab still works, using the basic cut-out with no AI scenes.
+
 ## Why
 
 Home-based sellers, craft makers and small boutique owners usually juggle spreadsheets, notebooks and a partial POS. The tools built for them tend to be subscription-based, cloud-only, or built for enterprise. StockSnap is aimed at the **handmade seller at a weekend market**: fast enough to use at the booth, simple enough to use without accounting knowledge, and private because everything stays on your machine.
@@ -115,6 +137,8 @@ All settings are environment variables with sensible defaults:
 | `STOCKSNAP_VISION_TIMEOUT` | `300` | Seconds to wait for the model |
 | `STOCKSNAP_MATCHER` | `auto` | `auto` / `clip` / `lite` / `off` |
 | `STOCKSNAP_MATCH_THRESHOLD` | `0.80` | Minimum similarity to suggest a match |
+| `STOCKSNAP_CUTOUT_MODEL` | `isnet-general-use` | rembg model for cut-outs (e.g. `u2net`, `birefnet-general-lite`) |
+| `STOCKSNAP_IMAGEGEN_MODEL` | `stabilityai/sd-turbo` | Any diffusers text-to-image model for AI scenes |
 
 ## Project layout
 
@@ -124,10 +148,10 @@ backend/
     main.py            FastAPI app factory; also serves the built UI
     models.py          SQLModel tables (Item, Sale, Expense), money in cents
     routers/           items, scan, sales & expenses, reports, system
-    services/          barcode, vision (Ollama), matcher (CLIP / lite), images
+    services/          barcode, vision (Ollama), matcher (CLIP / lite), images, imagelab (listing photos)
   tests/               pytest suite (AI faked for speed)
 frontend/
-  src/pages/           Add stock, Sell, Inventory, Money
+  src/pages/           Add stock, Bulk, Sell, Inventory, Photos, Money
   src/components/      PhotoButton, ItemForm
 docs/                  problem & requirements, architecture
 ```
@@ -143,6 +167,8 @@ docs/                  problem & requirements, architecture
 - [ ] Full variant matrix (size × colour) under one parent product
 - [ ] CSV import from Etsy / Square / Shopify exports
 - [ ] Optional sync (local-first, e.g. CRDT or self-hosted)
+- [x] Listing photos from one product photo (cut-out, white main image, scenes, details card)
+- [ ] Size chart and package-contents images
 - [ ] Packaged desktop installer (Tauri or PyInstaller)
 - [ ] PWA install on phone
 

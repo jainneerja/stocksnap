@@ -1,0 +1,13 @@
+# Image lab (proof of concept) - optional extras.
+#
+# 1) Better background removal (~180 MB model downloads on first use, then offline):
+rembg[cpu]>=2.0.60
+#
+# 2) AI-generated scene backgrounds (big: PyTorch ~1-2 GB + model ~2 GB on first use).
+#    On a laptop without an NVIDIA GPU, install the smaller CPU build of PyTorch first:
+#      pip install torch --index-url https://download.pytorch.org/whl/cpu
+torch>=2.2
+diffusers>=0.30
+transformers>=4.40
+accelerate>=0.30
+safetensors>=0.4

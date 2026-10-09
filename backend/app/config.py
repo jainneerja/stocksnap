@@ -34,6 +34,14 @@ class Settings:
         default_factory=lambda: float(os.environ.get("STOCKSNAP_MATCH_THRESHOLD", "0.80"))
     )
 
+    # Image lab (proof of concept). Both optional: see requirements-imagelab.txt
+    cutout_model: str = field(
+        default_factory=lambda: os.environ.get("STOCKSNAP_CUTOUT_MODEL", "isnet-general-use")
+    )
+    imagegen_model: str = field(
+        default_factory=lambda: os.environ.get("STOCKSNAP_IMAGEGEN_MODEL", "stabilityai/sd-turbo")
+    )
+
     max_image_px: int = 1024
 
     @property

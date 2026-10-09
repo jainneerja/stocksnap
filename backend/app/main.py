@@ -17,8 +17,9 @@ from fastapi.staticfiles import StaticFiles
 
 from . import __version__
 from .config import Settings
-from .routers import batches, items, reports, sales, scan, shops, system
+from .routers import batches, items, lab, reports, sales, scan, shops, system
 from .services.ai import AI
+from .services.imagelab import ImageLab
 from .services.shops import ShopRegistry
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -26,12 +27,14 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 
 
-def create_app(settings: Optional[Settings] = None, ai: Optional[AI] = None) -> FastAPI:
+def create_app(settings: Optional[Settings] = None, ai: Optional[AI] = None,
+               image_lab: Optional[ImageLab] = None) -> FastAPI:
     settings = settings or Settings()
     app = FastAPI(title="StockSnap", version=__version__)
     app.state.settings = settings
     app.state.shops = ShopRegistry(settings)  # each shop has its own database + photos
     app.state.ai = ai or AI.from_settings(settings)
+    app.state.lab = image_lab or ImageLab(settings.cutout_model, settings.imagegen_model)
 
     # Dev server (Vite on :5173) talks to the API on :8000.
     app.add_middleware(
@@ -41,7 +44,7 @@ def create_app(settings: Optional[Settings] = None, ai: Optional[AI] = None) -> 
         allow_headers=["*"],
     )
 
-    for r in (shops, items, scan, batches, sales, reports, system):
+    for r in (shops, items, scan, batches, lab, sales, reports, system):
         app.include_router(r.router)
 
     # Serve the built React app, so a single `uvicorn` command runs everything.

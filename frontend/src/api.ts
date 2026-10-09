@@ -388,3 +388,53 @@ export const KIND_LABELS: Record<ShopKind, { label: string; hint: string }> = {
   candle: { label: "Candles", hint: "Jars, tins, wax melts" },
   other: { label: "Something else", hint: "Anything else you sell" },
 };
+
+// ------------------------------------------------------------- image lab
+
+export interface LabOutput {
+  file: string;
+  look: string;
+  label: string;
+  seconds: number;
+  note: string;
+  kb: number;
+}
+
+export interface LabJob {
+  id: string;
+  status: "queued" | "running" | "done" | "failed";
+  message: string;
+  created: number;
+  outputs: LabOutput[];
+  notes: string[];
+  total_s: number;
+  cutout_s?: number;
+  options: { looks: string[]; scene: string; title: string };
+}
+
+export interface LabStatus {
+  cutout: { engine: string; model: string; quality: string; hint?: string };
+  generator: { available: boolean; model: string; device?: string; loaded?: boolean; detail: string };
+  looks: Record<string, string>;
+  scenes: string[];
+}
+
+export const lab = {
+  status: () => req<LabStatus>("/api/lab/status"),
+  jobs: () => req<LabJob[]>("/api/lab/jobs"),
+  job: (id: string) => req<LabJob>(`/api/lab/jobs/${id}`),
+  create: (file: Blob, opts: { looks: string[]; scene: string; custom_prompt: string; ai_count: number; title: string; bullets: string }) => {
+    const fd = new FormData();
+    fd.append("file", file, "photo.jpg");
+    fd.append("looks", opts.looks.join(","));
+    fd.append("scene", opts.scene);
+    fd.append("custom_prompt", opts.custom_prompt);
+    fd.append("ai_count", String(opts.ai_count));
+    fd.append("title", opts.title);
+    fd.append("bullets", opts.bullets);
+    return req<LabJob>("/api/lab/jobs", { method: "POST", body: fd });
+  },
+  remove: (id: string) => req<void>(`/api/lab/jobs/${id}`, { method: "DELETE" }),
+  fileUrl: (id: string, name: string) => `/api/lab/files/${id}/${name}`,
+  zipUrl: (id: string, prefix: string) => `/api/lab/jobs/${id}/zip${qs({ prefix })}`,
+};

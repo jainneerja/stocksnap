@@ -55,7 +55,7 @@ header { display: flex; align-items: center; justify-content: space-between; pad
 
 /* bottom tab bar: thumb-friendly on phones */
 .tabs {
-  position: fixed; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(5, 1fr);
+  position: fixed; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(6, 1fr);
   background: var(--surface); border-top: 1px solid var(--line); padding: 6px max(6px, env(safe-area-inset-left)) calc(6px + env(safe-area-inset-bottom));
 }
 .tabs button { font: inherit; font-weight: 600; background: none; border: 0; padding: 14px 4px; border-radius: 10px; color: var(--muted); cursor: pointer; }
@@ -312,3 +312,33 @@ label.kind:focus-within { outline: 2px solid var(--brand); outline-offset: 2px; 
 .label-shop { width: 100%; text-align: center; font-weight: 700; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; }
 label.kind span { font-weight: 400; }
 .shop-logo.sm { width: 24px; height: 24px; border-radius: 6px; }
+
+/* ---------- image lab */
+.engines { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 6px 0 14px; }
+.engines .ok { color: var(--brand); font-weight: 600; }
+.engines .warn { color: var(--warn); font-weight: 600; }
+.lab-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 18px; align-items: start; }
+@media (max-width: 720px) { .lab-grid { grid-template-columns: 1fr; } }
+.lab-photo { aspect-ratio: 1; border: 2px dashed var(--line); border-radius: var(--radius); display: grid; place-items: center; overflow: hidden; background: var(--surface); }
+.lab-photo img { width: 100%; height: 100%; object-fit: contain; }
+.lab-right { display: flex; flex-direction: column; gap: 12px; }
+.lab-right h2 { margin: 0; }
+.look-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.fchip:disabled { opacity: .45; cursor: not-allowed; }
+.lab-box { display: flex; flex-direction: column; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; }
+.lab-box p { margin: 0; }
+label.inline { flex-direction: row; align-items: center; gap: 8px; }
+label.inline select { width: auto; }
+.lab-results { margin-top: 22px; }
+.lab-progress { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--brand-soft); padding: 10px 12px; border-radius: 12px; margin-bottom: 10px; }
+.lab-progress .zip { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.lab-progress .zip input { width: 150px; }
+.lab-out { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); margin-top: 10px; }
+.lab-out figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; }
+.lab-out img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: #fff; }
+.lab-out figcaption { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 2px; }
+.lab-out figure.placeholder { aspect-ratio: 1; display: grid; place-items: center; }
+.lab-recent { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; }
+.lab-thumb { font: inherit; border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 0 0 6px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px; overflow: hidden; flex: none; }
+.lab-thumb img { width: 110px; height: 110px; object-fit: cover; }
+.tabs button { font-size: .92rem; }
