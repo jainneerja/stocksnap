@@ -39,6 +39,18 @@ Two counting modes:
 
 **Photo setup:** use a **matte black** background (velvet, felt, foam board) for gold, silver, pearls and bright items, and **plain white card** for dark items. Shoot in daylight with no flash, phone straight overhead, with a finger-width gap between items. Earring pairs should touch, so each pair counts as one.
 
+## Fast descriptions with templates
+
+On a laptop CPU, most of the AI's time goes into *writing words*, so StockSnap lets each shop pick how item names and descriptions are written (Shop settings → Item names and descriptions):
+
+| Mode | How | Speed |
+|---|---|---|
+| **Instant** | No AI. Colours are read from the photo's pixels, the type comes from what you told it ("What is it?", batch answers), and your template writes the text | under a second |
+| **Fast AI** (default) | The model answers a few short facts (type, colours, pattern, printed text) and your template writes the text | several times quicker than free writing |
+| **Detailed AI** | The model writes everything itself | slowest |
+
+Templates use blanks like `{colour} {type}[ with {pattern}]. [Size {size}. ]Made with care by {shop}.` Anything in square brackets disappears when its blank is unknown. Every listing reads in the shop's own style, and if the AI isn't running, Fast falls back to Instant.
+
 ## Tell the AI what you sell
 
 A small vision model only sees shapes and colours, so it can call a round embroidered outfit a "hat". You can tell it what your items really are, in your own words, in three places:

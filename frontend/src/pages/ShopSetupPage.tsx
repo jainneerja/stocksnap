@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { KIND_LABELS, logoUrl, shops, type Shop, type ShopInput, type ShopKind } from "../api";
+import { KIND_LABELS, logoUrl, shops, type DescribeMode, type Shop, type ShopInput, type ShopKind } from "../api";
 
 const KINDS = Object.keys(KIND_LABELS) as ShopKind[];
 
@@ -26,6 +26,9 @@ export function ShopSetupPage({
     sku_prefix: existing?.sku_prefix ?? "",
     low_stock_default: existing?.low_stock_default ?? 2,
     ai_context: existing?.ai_context ?? "",
+    describe_mode: existing?.describe_mode ?? "fast",
+    name_template: existing?.name_template ?? "",
+    desc_template: existing?.desc_template ?? "",
   });
   const [prefixTouched, setPrefixTouched] = useState(!!existing);
   const [logo, setLogo] = useState<File | null>(null);
@@ -190,6 +193,8 @@ export function ShopSetupPage({
           </div>
         </div>
 
+        <DescriptionSettings v={v} setV={setV} />
+
         {error && <p className="error">{error}</p>}
         <div className="actions">
           {onCancel && !first && (
@@ -215,5 +220,71 @@ export function ShopSetupPage({
         </div>
       )}
     </section>
+  );
+}
+
+const MODES: { key: DescribeMode; label: string; hint: string }[] = [
+  { key: "instant", label: "Instant", hint: "No AI. Colours from the photo + what you tell it. Under a second." },
+  { key: "fast", label: "Fast AI", hint: "AI answers a few short facts, your template writes the text. Recommended." },
+  { key: "full", label: "Detailed AI", hint: "AI writes everything itself. Slowest on a laptop." },
+];
+
+// How names and descriptions are written: speed + the shop's own template.
+function DescriptionSettings({ v, setV }: { v: ShopInput; setV: (v: ShopInput) => void }) {
+  const [sample, setSample] = useState<{ name: string; description: string } | null>(null);
+  const [defaults, setDefaults] = useState({ name: "", desc: "" });
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      shops
+        .previewDescription({ kind: v.kind, name: v.name, name_template: v.name_template, desc_template: v.desc_template })
+        .then((r) => {
+          setSample({ name: r.name, description: r.description });
+          setDefaults({ name: r.default_name_template, desc: r.default_desc_template });
+        })
+        .catch(() => undefined);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [v.kind, v.name, v.name_template, v.desc_template]);
+
+  return (
+    <fieldset className="desc-settings">
+      <legend>Item names and descriptions</legend>
+      <div className="mode-cards">
+        {MODES.map((m) => (
+          <label key={m.key} className={`kind ${v.describe_mode === m.key ? "on" : ""}`}>
+            <input type="radio" name="describe_mode" checked={v.describe_mode === m.key}
+              onChange={() => setV({ ...v, describe_mode: m.key })} />
+            <strong>{m.label}</strong>
+            <span className="muted small">{m.hint}</span>
+          </label>
+        ))}
+      </div>
+      {v.describe_mode !== "full" && (
+        <>
+          <label>
+            Name template
+            <input value={v.name_template} maxLength={200} placeholder={defaults.name}
+              onChange={(e) => setV({ ...v, name_template: e.target.value })} />
+          </label>
+          <label>
+            Description template
+            <textarea rows={3} value={v.desc_template} maxLength={600} placeholder={defaults.desc}
+              onChange={(e) => setV({ ...v, desc_template: e.target.value })} />
+            <small>
+              Blanks: {"{colour} {type} {pattern} {material} {size} {brand} {text} {shop}"}. Anything in [square brackets] is
+              left out when its blank is unknown. Leave empty to use the default shown.
+            </small>
+          </label>
+          {sample && (
+            <div className="desc-preview">
+              <span className="muted small">Example</span>
+              <strong>{sample.name}</strong>
+              <span>{sample.description}</span>
+            </div>
+          )}
+        </>
+      )}
+    </fieldset>
   );
 }

@@ -40,7 +40,11 @@ export interface Draft {
   brand: string;
   price_cents: number | null;
   tags: string[];
+  mode?: DescribeMode; // how this draft was made
+  seconds?: number;
 }
+
+export type DescribeMode = "instant" | "fast" | "full";
 
 export interface Sale {
   id: number;
@@ -358,6 +362,9 @@ export interface Shop {
   sku_prefix: string;
   low_stock_default: number;
   ai_context: string;
+  describe_mode: DescribeMode;
+  name_template: string;
+  desc_template: string;
   has_logo: boolean;
   created_at: string;
 }
@@ -368,6 +375,9 @@ export interface ShopInput {
   sku_prefix: string;
   low_stock_default: number;
   ai_context: string;
+  describe_mode: DescribeMode;
+  name_template: string;
+  desc_template: string;
 }
 
 export const shops = {
@@ -375,6 +385,11 @@ export const shops = {
   create: (data: ShopInput) => req<Shop>("/api/shops", json("POST", data)),
   update: (slug: string, data: Partial<ShopInput>) => req<Shop>(`/api/shops/${slug}`, json("PATCH", data)),
   select: (slug: string) => req<Shop>(`/api/shops/${slug}/select`, { method: "POST" }),
+  previewDescription: (data: { kind: string; name: string; name_template: string; desc_template: string }) =>
+    req<{ name: string; description: string; default_name_template: string; default_desc_template: string }>(
+      "/api/shops/preview-description",
+      json("POST", data),
+    ),
   suggestPrefix: (name: string) => req<{ sku_prefix: string }>(`/api/shops/suggest-prefix${qs({ name })}`),
   uploadLogo: (slug: string, file: Blob) => {
     const fd = new FormData();

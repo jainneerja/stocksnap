@@ -130,13 +130,71 @@ def parse_draft(raw: str) -> Draft:
     return draft
 
 
+# Fast mode: the model only answers a few short facts and a template writes the
+# listing. On a CPU most of the time goes into generating words, so asking for
+# ~30 words instead of ~150 is what makes this several times faster.
+FACTS_PROMPT = """Look at the product photo. If there is a second photo, it is a close-up of its label or tag.
+Reply with JSON only, short values, using exactly these keys:
+{"type": "what the item is, 1-3 words",
+ "colours": ["main colours, at most 3"],
+ "pattern": "main design or decoration in at most 6 words, or empty",
+ "material": "only if obvious, else empty",
+ "text": "product name or brand printed on it, else empty",
+ "size": "size printed on a label or tag, else empty",
+ "price": "price printed on a tag as a number, else empty"}"""
+
+
+@dataclass
+class Facts:
+    type: str = ""
+    colours: list[str] = field(default_factory=list)
+    pattern: str = ""
+    material: str = ""
+    text: str = ""
+    size: str = ""
+    price_cents: Optional[int] = None
+
+
+def parse_facts(raw: str) -> Facts:
+    match = re.search(r"\{.*\}", raw, re.S)
+    data: dict = {}
+    if match:
+        try:
+            data = json.loads(match.group(0))
+        except json.JSONDecodeError:
+            data = {}
+    if not isinstance(data, dict):
+        data = {}
+
+    def s(key: str, limit: int) -> str:
+        val = data.get(key, "")
+        if isinstance(val, list):
+            val = ", ".join(str(v) for v in val)
+        val = str(val or "").strip()[:limit]
+        return "" if val.lower() in _NO_VALUE else val
+
+    colours = data.get("colours") or data.get("colors") or []
+    if isinstance(colours, str):
+        colours = re.split(r",|/| and ", colours)
+    colours = [str(c).strip().lower() for c in colours if str(c).strip()][:3]
+    return Facts(
+        type=s("type", 40).lower(),
+        colours=colours,
+        pattern=s("pattern", 60).lower(),
+        material=s("material", 60),
+        text=s("text", 60),
+        size=_clean_size(s("size", 40)),
+        price_cents=_price_to_cents(data.get("price")),
+    )
+
+
 def seller_context(*parts: str) -> str:
     """Join shop-level and item-level notes from the seller, skipping blanks."""
     return " ".join(p.strip().rstrip(".") + "." for p in parts if p and p.strip())
 
 
-def build_prompt(hint: str = "", seller: str = "") -> str:
-    prompt = PROMPT
+def build_prompt(hint: str = "", seller: str = "", base: str = PROMPT) -> str:
+    prompt = base
     if seller:
         # Small vision models guess from shape alone ("round embroidered thing = hat").
         # The seller knows what they sell, so their words decide what the item IS;
@@ -202,3 +260,23 @@ class OllamaVision:
             log.warning("vision model call failed: %s", exc)
             raise VisionUnavailable(str(exc)) from exc
         return parse_draft(r.json().get("response", ""))
+
+    def facts(self, images: list[Image.Image], hint: str = "", seller: str = "") -> Facts:
+        """Fast mode: a few short facts only (see FACTS_PROMPT)."""
+        payload = {
+            "model": self.model,
+            "prompt": build_prompt(hint, seller, FACTS_PROMPT),
+            # smaller pictures: colours and type don't need fine detail; tags keep more
+            "images": [_to_b64_jpeg(im, 512 if i == 0 else 896) for i, im in enumerate(images)],
+            "format": "json",
+            "stream": False,
+            "keep_alive": "30m",
+            "options": {"temperature": 0.1, "num_predict": 120},
+        }
+        try:
+            r = httpx.post(f"{self.base_url}/api/generate", json=payload, timeout=self.timeout_s)
+            r.raise_for_status()
+        except Exception as exc:  # noqa: BLE001
+            log.warning("vision model call failed: %s", exc)
+            raise VisionUnavailable(str(exc)) from exc
+        return parse_facts(r.json().get("response", ""))

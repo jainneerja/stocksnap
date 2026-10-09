@@ -14,7 +14,7 @@ from app.config import Settings
 from app.main import create_app
 from app.services.ai import AI
 from app.services.matcher import LiteEmbedder
-from app.services.vision import Draft, VisionUnavailable
+from app.services.vision import Draft, Facts, VisionUnavailable
 
 
 class FakeVision:
@@ -27,10 +27,21 @@ class FakeVision:
         self.calls: list[int] = []  # number of images per call
         self.hints: list[str] = []
         self.sellers: list[str] = []
+        self.fact_calls = 0
+        self.pattern = "floral print"
+        self.read_text = False
         self.label_reader = None  # optional fn(img, hint) -> Draft, set by tests
 
     def status(self):
         return {"available": not self.fail, "model": self.model, "detail": "fake"}
+
+    def facts(self, images, hint="", seller=""):
+        """Fast mode: derived from the same fake so tests stay simple."""
+        d = self.describe(images, hint, seller)
+        self.fact_calls += 1
+        return Facts(type=d.category.lower(), colours=[c for c in [d.color.lower()] if c],
+                     pattern=self.pattern, text=d.name if self.read_text else "", size=d.size,
+                     price_cents=d.price_cents)
 
     def describe(self, images, hint="", seller=""):
         if self.fail:
@@ -61,7 +72,8 @@ def make_client(tmp_path):
         c = TestClient(create_app(settings, ai))
         c.vision = ai.vision
         if with_shop:
-            r = c.post("/api/shops", json={"name": "Test Shop", "kind": "other", "sku_prefix": ""})
+            r = c.post("/api/shops", json={"name": "Test Shop", "kind": "other", "sku_prefix": "",
+                                             "describe_mode": "full"})
             assert r.status_code == 201, r.text  # also selects it (cookie)
         return c
 

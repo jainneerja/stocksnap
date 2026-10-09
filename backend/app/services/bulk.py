@@ -21,6 +21,7 @@ from . import ledger
 from .ai import AI
 from .images import load_image, resolve_image, save_image
 from .matcher import rank
+from .listing import Known, describe_item, singular
 from .presets import PRESETS, ai_note, normalize_category, resolve_answers
 from .segment import crop, find_pieces
 from .vision import VisionUnavailable, seller_context
@@ -169,7 +170,8 @@ def reset_descriptions(session: Session, batch: Batch, note: str) -> None:
     session.commit()
 
 
-def describe_batch(engine, ai: AI, settings: Settings, batch_id: int, shop_context: str = "") -> None:
+def describe_batch(engine, ai: AI, settings: Settings, batch_id: int, shop_context: str = "",
+                   style=None) -> None:
     """Runs in the background. One AI call per group, committed one at a time
     so the UI can show progress."""
     try:
@@ -183,6 +185,15 @@ def describe_batch(engine, ai: AI, settings: Settings, batch_id: int, shop_conte
             if preset.categories and "category" not in fields:
                 hint += " The category MUST be one of: " + ", ".join(preset.categories) + "."
             seller = seller_context(shop_context, ai_note(answers))
+            # Template modes (instant / fast): what the seller already told us
+            # fills the template directly; the AI (if used) only adds short facts.
+            category = fields.get("category", "")
+            known = Known(
+                type=singular(category) if category else (ai_note(answers) if style and style.mode == "instant" else ""),
+                material=fields.get("material", ""), size=fields.get("size", ""), brand=fields.get("brand", ""),
+                extra_tags=[v.lower() for v in attrs.values() if len(v) < 25],
+            )
+            fallback = {"clothing": "outfit", "jewellery": "piece", "soap": "soap", "candle": "candle"}.get(preset.key, "item")
 
             pending = session.exec(
                 select(BatchGroup).where(
@@ -195,7 +206,11 @@ def describe_batch(engine, ai: AI, settings: Settings, batch_id: int, shop_conte
                 det = session.get(Detection, group.rep_detection_id)
                 try:
                     img = load_image(resolve_image(settings.images_dir, det.crop_path).read_bytes())
-                    draft = ai.vision.describe([img], hint=hint, seller=seller)
+                    if style is None:
+                        draft = ai.vision.describe([img], hint=hint, seller=seller)
+                    else:
+                        draft, _ = describe_item(ai.vision, style, [img], known, seller=seller,
+                                                 hint=hint, fallback_type=fallback)
                 except (VisionUnavailable, FileNotFoundError) as exc:
                     log.warning("describe failed for group %s: %s", group.id, exc)
                     group.status = "failed"

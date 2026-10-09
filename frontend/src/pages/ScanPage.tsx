@@ -21,6 +21,7 @@ export function ScanPage({ toast }: { toast: (msg: string) => void }) {
   const [stage, setStage] = useState<Stage>({ kind: "start" });
   const [form, setForm] = useState<FormValues>(emptyForm);
   const [aiBusy, setAiBusy] = useState(false);
+  const [drafted, setDrafted] = useState<{ mode: string; seconds: number } | null>(null);
   // The seller's own words for what the item is. Kept between items: people
   // usually add several of the same kind in a row.
   const [hint, setHint] = useState("");
@@ -67,9 +68,11 @@ export function ScanPage({ toast }: { toast: (msg: string) => void }) {
 
   function runAi(scan: ScanResult, base: Item | undefined, tagPath: string | undefined, note: string) {
     setAiBusy(true);
+    setDrafted(null);
     api
       .describe(scan.image_path, tagPath, note.trim())
-      .then((d) =>
+      .then((d) => {
+        if (d.mode) setDrafted({ mode: d.mode, seconds: d.seconds ?? 0 });
         setForm((f) => {
           const price = d.price_cents ? toDollars(d.price_cents) : "";
           if (base) {
@@ -88,8 +91,8 @@ export function ScanPage({ toast }: { toast: (msg: string) => void }) {
             price,
             tags: d.tags.join(", "),
           };
-        }),
-      )
+        });
+      })
       .catch((e) => toast((e as Error).message))
       .finally(() => setAiBusy(false));
   }
@@ -210,6 +213,12 @@ export function ScanPage({ toast }: { toast: (msg: string) => void }) {
                 aria-label="Tell the AI what this is" placeholder="AI got it wrong? Tell it what this is" />
               <button className="btn btn-secondary" disabled={aiBusy || !hint.trim()}>Ask AI again</button>
             </form>
+          )}
+          {drafted && !aiBusy && (
+            <p className="muted small drafted">
+              Draft written in {drafted.seconds < 1 ? "under a second" : `${drafted.seconds.toFixed(1)} s`} ·{" "}
+              {drafted.mode === "instant" ? "Instant (no AI)" : drafted.mode === "fast" ? "Fast AI" : "Detailed AI"}
+            </p>
           )}
           <ItemForm
             initial={form}

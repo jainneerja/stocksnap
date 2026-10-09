@@ -199,6 +199,9 @@ function BatchView({
   onExit: () => void;
   onSaved: (b: Batch, items: Item[]) => void;
 }) {
+  const { shop } = useShop();
+  // Instant (and fast, which falls back to instant) write descriptions without the AI.
+  const canDescribe = aiReady || shop.describe_mode !== "full";
   const [b, setB] = useState<Batch | null>(null);
   const [uploading, setUploading] = useState(0);
   const [reviewing, setReviewing] = useState(false);
@@ -240,7 +243,7 @@ function BatchView({
 
   async function describe() {
     setReviewing(true);
-    if (!aiReady) return; // review without AI: type names yourself
+    if (!canDescribe) return; // review without AI: type names yourself
     setB(await bulk.describe(id));
   }
 
@@ -315,7 +318,7 @@ function BatchView({
             <strong>{b.progress.pieces}</strong> {b.mode === "unique" ? "pieces" : `units · ${b.progress.groups} products`}
           </span>
           <button className="btn btn-primary" onClick={describe} disabled={uploading > 0}>
-            {aiReady ? "Next: describe with AI" : "Next: review"}
+            {!canDescribe ? "Next: review" : shop.describe_mode === "instant" || !aiReady ? "Next: write descriptions" : "Next: describe with AI"}
           </button>
         </div>
       )}
@@ -331,8 +334,8 @@ function BatchView({
               </span>
             </div>
           )}
-          {!aiReady && <div className="notice">Local AI is off, so type a name for each item (or leave blank for "{b.preset_label} #number").</div>}
-          {aiReady && !working && b.progress.done > 0 && (
+          {!canDescribe && <div className="notice">Local AI is off, so type a name for each item (or leave blank for "{b.preset_label} #number").</div>}
+          {canDescribe && !working && b.progress.done > 0 && (
             <RedoAi batch={b} onChange={setB} toast={toast} />
           )}
           <BulkPrice batch={b} onChange={setB} />

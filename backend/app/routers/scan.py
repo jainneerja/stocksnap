@@ -10,6 +10,7 @@ The UI shows scan results immediately and fills in the AI draft when it arrives.
 
 from __future__ import annotations
 
+import time
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
@@ -20,7 +21,11 @@ from ..db import current_shop, get_session, shop_settings
 from ..models import Item, ItemRead
 from ..services.barcode import read_barcode
 from ..services.images import InvalidImage, load_image, resolve_image, save_image
+from ..services.listing import Known, describe_item
 from ..services.vision import VisionUnavailable, seller_context
+
+# what to call an item when nothing better is known (instant mode, no hint)
+_KIND_ITEM = {"clothing": "outfit", "jewellery": "piece", "soap": "soap", "candle": "candle"}
 
 router = APIRouter(prefix="/api", tags=["scan"])
 
@@ -103,12 +108,18 @@ def describe(body: DescribeRequest, request: Request):
     except FileNotFoundError:
         raise HTTPException(404, "Image not found")
     try:
-        seller = seller_context(current_shop(request).info.ai_context, body.hint)
+        info = current_shop(request).info
+        seller = seller_context(info.ai_context, body.hint)
         images = [load_image(p.read_bytes()) for p in paths]
-        draft = request.app.state.ai.vision.describe(images, seller=seller)
+        start = time.perf_counter()
+        draft, mode = describe_item(
+            request.app.state.ai.vision, request.app.state.shops.style(info), images,
+            Known(type=body.hint), seller=seller,
+            fallback_type=_KIND_ITEM.get(info.kind, "item"),
+        )
     except VisionUnavailable:
         # Graceful fallback: the user just types the details in.
         raise HTTPException(
             503, "The local AI model isn't available right now - you can fill in the details yourself."
         )
-    return draft.to_dict()
+    return {**draft.to_dict(), "mode": mode, "seconds": round(time.perf_counter() - start, 2)}

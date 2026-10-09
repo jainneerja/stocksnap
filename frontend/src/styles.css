@@ -351,3 +351,11 @@ label.inline select { width: auto; }
 .ai-redo .btn { white-space: nowrap; }
 .ai-redo-box { background: var(--brand-soft); border-radius: 12px; padding: 10px 12px; margin: 10px 0; }
 .ai-redo-box summary { cursor: pointer; font-weight: 600; }
+
+/* Item description settings */
+.desc-settings { border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 12px; }
+.desc-settings legend { font-weight: 700; padding: 0 6px; }
+.mode-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+@media (max-width: 560px) { .mode-cards { grid-template-columns: 1fr; } }
+.desc-preview { background: var(--brand-soft); border-radius: 10px; padding: 10px 12px; display: grid; gap: 2px; }
+.drafted { margin: 0 0 8px; }

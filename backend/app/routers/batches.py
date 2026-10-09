@@ -260,7 +260,7 @@ def describe(batch_id: int, request: Request, tasks: BackgroundTasks,
     session.commit()
     if bulk.start_describe(shop.settings, batch_id):
         tasks.add_task(bulk.describe_batch, shop.engine, request.app.state.ai, shop.settings, batch_id,
-                       shop.info.ai_context)
+                       shop.info.ai_context, request.app.state.shops.style(shop.info))
     return batch_out(session, b, shop_settings(request))
 
 

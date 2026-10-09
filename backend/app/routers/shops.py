@@ -25,6 +25,7 @@ class ShopCreate(BaseModel):
     sku_prefix: Optional[str] = None
     low_stock_default: int = Field(default=2, ge=0, le=1000)
     ai_context: str = Field(default="", max_length=400)
+    describe_mode: str = "fast"
 
 
 class ShopUpdate(BaseModel):
@@ -33,6 +34,16 @@ class ShopUpdate(BaseModel):
     sku_prefix: Optional[str] = None
     low_stock_default: Optional[int] = Field(default=None, ge=0, le=1000)
     ai_context: Optional[str] = Field(default=None, max_length=400)
+    describe_mode: Optional[str] = None
+    name_template: Optional[str] = Field(default=None, max_length=200)
+    desc_template: Optional[str] = Field(default=None, max_length=600)
+
+
+class TemplatePreview(BaseModel):
+    kind: str = "other"
+    name: str = ""
+    name_template: str = Field(default="", max_length=200)
+    desc_template: str = Field(default="", max_length=600)
 
 
 class ShopList(BaseModel):
@@ -67,10 +78,23 @@ def prefix_for(name: str = ""):
     return {"sku_prefix": suggest_prefix(name) if name.strip() else ""}
 
 
+@router.post("/api/shops/preview-description")
+def preview_description(body: TemplatePreview):
+    """Sample name + description for the settings screen, and the defaults."""
+    from ..services.listing import DEFAULT_TEMPLATES, ShopStyle, preview
+
+    style = ShopStyle(name=body.name or "Your Shop", kind=body.kind,
+                      name_template=body.name_template, desc_template=body.desc_template)
+    d = preview(style)
+    dn, dd = DEFAULT_TEMPLATES.get(body.kind, DEFAULT_TEMPLATES["other"])
+    return {"name": d.name, "description": d.description, "default_name_template": dn,
+            "default_desc_template": dd}
+
+
 @router.post("/api/shops", response_model=ShopInfo, status_code=201)
 def create_shop(data: ShopCreate, request: Request, response: Response):
     info = request.app.state.shops.create(data.name, data.kind, data.sku_prefix, data.low_stock_default,
-                                         data.ai_context)
+                                         data.ai_context, data.describe_mode)
     request.app.state.shops.context(info)  # creates the database now, not on first use
     _select(response, info.slug)
     return info

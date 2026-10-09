@@ -39,6 +39,10 @@ class ShopInfo(BaseModel):
     sku_prefix: str = ""  # e.g. "SIB" -> SIB-00012; empty = category based (TSH-00012)
     low_stock_default: int = Field(default=2, ge=0)
     ai_context: str = Field(default="", max_length=400)  # "what do you sell?", given to the AI
+    # Item descriptions: instant (no AI) | fast (AI answers short facts) | full (AI writes freely)
+    describe_mode: str = "fast"
+    name_template: str = Field(default="", max_length=200)  # empty = default for the shop type
+    desc_template: str = Field(default="", max_length=600)
     has_logo: bool = False
     created_at: str = ""
 
@@ -107,7 +111,7 @@ class ShopRegistry:
     # ------------------------------------------------------------ changes
 
     def create(self, name: str, kind: str = "other", sku_prefix: Optional[str] = None,
-               low_stock_default: int = 2, ai_context: str = "") -> ShopInfo:
+               low_stock_default: int = 2, ai_context: str = "", describe_mode: str = "fast") -> ShopInfo:
         base = slugify(name)
         slug, n = base, 2
         with self._lock:
@@ -120,6 +124,7 @@ class ShopRegistry:
                 sku_prefix=clean_prefix(suggest_prefix(name) if sku_prefix is None else sku_prefix),
                 low_stock_default=low_stock_default,
                 ai_context=(ai_context or "").strip()[:400],
+                describe_mode=describe_mode if describe_mode in ("instant", "fast", "full") else "fast",
                 created_at=datetime.now(timezone.utc).isoformat(),
             )
             self._write(info)
@@ -131,12 +136,21 @@ class ShopRegistry:
             raise KeyError(slug)
         if "sku_prefix" in changes and changes["sku_prefix"] is not None:
             changes["sku_prefix"] = clean_prefix(changes["sku_prefix"])
+        if changes.get("describe_mode") and changes["describe_mode"] not in ("instant", "fast", "full"):
+            changes["describe_mode"] = "fast"
         if changes.get("kind") and changes["kind"] not in SHOP_KINDS:
             changes["kind"] = "other"
         data = info.model_dump() | {k: v for k, v in changes.items() if v is not None}
         info = ShopInfo(**data)
         self._write(info)
         return info
+
+    @staticmethod
+    def style(info: ShopInfo):
+        from .listing import ShopStyle
+
+        return ShopStyle(name=info.name, kind=info.kind, name_template=info.name_template,
+                         desc_template=info.desc_template, mode=info.describe_mode)
 
     def logo_path(self, slug: str) -> Path:
         return self._dir(slug) / "logo.png"
