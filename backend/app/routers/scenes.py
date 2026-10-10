@@ -82,6 +82,7 @@ class SceneUpdate(BaseModel):
     remove: Optional[list[StrokeIn]] = Field(default=None, max_length=200)
     shading: Optional[float] = Field(default=None, ge=0, le=1)
     shadow: Optional[float] = Field(default=None, ge=0, le=1)
+    scale: Optional[float] = Field(default=None, ge=0.5, le=1.2)
 
 
 @router.get("/api/scenes")

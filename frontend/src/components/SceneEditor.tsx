@@ -13,6 +13,7 @@ interface Geo {
   bottom: number;
   rx: number;
   tilt: number;
+  scale: number;
   top_box: [number, number, number, number] | null;
 }
 
@@ -39,7 +40,7 @@ export function SceneEditor({
   toast: (m: string) => void;
 }) {
   const [geo, setGeo] = useState<Geo>({
-    cx: scene.cx, top: scene.top, bottom: scene.bottom, rx: scene.rx, tilt: scene.tilt, top_box: scene.top_box,
+    cx: scene.cx, top: scene.top, bottom: scene.bottom, rx: scene.rx, tilt: scene.tilt, scale: scene.scale ?? 1, top_box: scene.top_box,
   });
   const [keep, setKeep] = useState<Stroke[]>(scene.keep);
   const [erase, setErase] = useState<Stroke[]>(scene.remove);
@@ -155,14 +156,24 @@ export function SceneEditor({
     }
   }
 
+  const [checked, setChecked] = useState(false);
+
+  // One loop: save, show what was found, and (if a product was tried) show it again.
   async function check() {
-    if (await save()) setView("layers");
+    if (!(await save())) return;
+    setView("layers");
+    setChecked(true);
+    if (product) await render(product);
   }
 
   async function tryWith(file: File | null) {
     if (!file) return;
     setProduct(file);
     if (dirty && !(await save())) return;
+    await render(file);
+  }
+
+  async function render(file: File) {
     setTrying(true);
     try {
       const url = await scenes.tryOn(scene.id, { file });
@@ -239,6 +250,7 @@ export function SceneEditor({
         </div>
       </div>
 
+      <div className="scene-work">
       <div className={`scene-canvas tool-${tool}`}>
         <img src={scenes.fileUrl(scene.id, view === "layers" ? "layers.jpg" : "scene.jpg", version)} alt="" draggable={false} />
         <svg
@@ -268,6 +280,13 @@ export function SceneEditor({
           )}
         </svg>
       </div>
+        {result && (
+        <figure className="scene-result">
+          <img src={result} alt="Preview" />
+          <figcaption className="muted small">Preview with your product. The product is your real photo, only reshaped to lie in the scene.</figcaption>
+        </figure>
+      )}
+      </div>
 
       <label className="inline small">
         View angle: from the front
@@ -275,6 +294,16 @@ export function SceneEditor({
           onChange={(e) => { setGeo({ ...geo, tilt: Number(e.target.value) }); setDirty(true); }} />
         from above
       </label>
+      <label className="inline small">
+        Dress size
+        <input type="range" min={0.6} max={1.15} step={0.01} value={geo.scale}
+          onChange={(e) => { setGeo({ ...geo, scale: Number(e.target.value) }); setDirty(true); }} />
+        {Math.round(geo.scale * 100)}%
+      </label>
+      <p className="muted small">
+        The oval marks what gets cleared away; <em>Dress size</em> sets how big the new product is inside it.
+        The top of the red box is where the neckline goes, so keep it below the chin.
+      </p>
 
       <div className="actions">
         <button className="btn btn-primary" onClick={check} disabled={saving}>{saving ? "Working…" : "Save & check"}</button>
@@ -283,12 +312,13 @@ export function SceneEditor({
         {product && <button className="link" onClick={() => tryWith(product)} disabled={trying}>Try again</button>}
       </div>
 
-      {result && (
-        <figure className="scene-result">
-          <img src={result} alt="Preview" />
-          <figcaption className="muted small">Preview with your product. The product is your real photo, only reshaped to lie in the scene.</figcaption>
-        </figure>
+      {checked && (
+        <div className="notice small">
+          Arms, hands or jewellery missing in the preview? Pick <strong>Keep brush</strong>, paint over them, then
+          <strong> Save &amp; check</strong> again. Bits of the old product still showing? Use <strong>Erase brush</strong>.
+        </div>
       )}
+
 
       <button className="link danger" onClick={() => window.confirm(`Delete scene "${scene.name}"?`) && onDelete()}>
         Delete this scene

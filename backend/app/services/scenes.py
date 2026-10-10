@@ -68,6 +68,7 @@ class SceneTemplate:
     remove: list[Stroke] = field(default_factory=list)  # always treat as old product
     shading: float = 0.5
     shadow: float = 0.38
+    scale: float = 1.0  # new product size relative to the oval (the oval also marks what gets cleared)
     sensitivity: float = 0.025  # colour share (in the oval's outer ring) that counts as old product
 
     @classmethod
@@ -93,6 +94,10 @@ def skirt_quad(t: SceneTemplate) -> np.ndarray:
     cx, yb, yf = t.cx * w, t.top * h, t.bottom * h
     tilt = min(max(t.tilt, 0.15), 0.5)
     rx = t.rx * w
+    # smaller product: shrink around the waist point (centre of the round product)
+    k = min(max(t.scale, 0.5), 1.2)
+    yw = yb + tilt * (yf - yb)
+    yb, yf, rx = yw - (yw - yb) * k, yw + (yf - yw) * k, rx * k
     wb = rx / (2 - 2 * tilt)
     wf = wb * (1 - tilt) / tilt
     return np.float32([[cx - wb, yb], [cx + wb, yb], [cx + wf, yf], [cx - wf, yf]])
@@ -184,8 +189,8 @@ def analyse(scene: np.ndarray, t: SceneTemplate) -> tuple[np.ndarray, np.ndarray
         _, blbl, bcent = cv2.kmeans(bs, 4, None, crit, 2, cv2.KMEANS_PP_CENTERS)
         bshare = np.bincount(blbl.ravel(), minlength=4) / len(blbl)
         bcent = bcent[bshare > 0.1]
-        dist = np.linalg.norm(lab[sel][:, None, :] - bcent[None], axis=2).min(axis=1)
-        background[sel] = np.where(dist < 14, 255, 0)
+        dist = np.linalg.norm(lab[gsel][:, None, :] - bcent[None], axis=2).min(axis=1)
+        background[gsel] = np.where(dist < 14, 255, 0)
 
     # keep-on-top: solid non-product, non-background shapes inside the marked areas
     keep = cv2.bitwise_and(region, cv2.bitwise_not(cv2.bitwise_or(product, background)))
@@ -202,7 +207,9 @@ def analyse(scene: np.ndarray, t: SceneTemplate) -> tuple[np.ndarray, np.ndarray
 
     # old product: the marked areas (minus kept parts) plus product-coloured
     # spill-over connected to them outside the oval
-    spill = cv2.bitwise_and(product, cv2.bitwise_not(region))
+    # (never into anything that looks like the table or wall - matters when the
+    # product is cream or beige like the background)
+    spill = cv2.bitwise_and(product, cv2.bitwise_not(cv2.bitwise_or(region, background)))
     # never grow up into whatever stands on the product (the idol / model):
     # the column above the top piece (or the middle of the oval), down to the oval's centre
     if t.top_box:

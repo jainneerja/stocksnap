@@ -483,6 +483,7 @@ export interface Scene {
   remove: Stroke[];
   shading: number;
   shadow: number;
+  scale: number;
 }
 
 export type SceneUpdate = Partial<Omit<Scene, "id" | "width" | "height" | "created" | "top_box">> & {

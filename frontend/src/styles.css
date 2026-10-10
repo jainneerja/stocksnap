@@ -388,3 +388,6 @@ label.inline select { width: auto; }
 .per-item { list-style: none; padding: 0; display: grid; gap: 8px; }
 .per-item li { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .per-item img { width: 44px; height: 44px; object-fit: cover; border-radius: 8px; }
+.scene-work { display: grid; gap: 14px; align-items: start; }
+@media (min-width: 1000px) { .scene-work { grid-template-columns: 1fr 1fr; } .scene-editor { max-width: 1280px; } }
+.scene-work .scene-result { margin: 0; }
