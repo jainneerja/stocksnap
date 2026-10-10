@@ -1,0 +1,6 @@
+models/
+bin/
+out/
+*.jpg
+*.jpeg
+*.png
