@@ -21,18 +21,80 @@ flat dress photo to try it.
 
 ---
 
+## Run it, step by step (Windows, Git Bash)
 
-Puts a **real dress photo** onto a ready-made idol scene in about a second, on any laptop.
-No AI redraws the dress, so colours and embroidery stay exactly as photographed.
+**1. One-time setup** - you need the StockSnap backend environment (it has OpenCV and NumPy).
+If you haven't set it up yet:
+
+```bash
+cd /c/Projects/stocksnap/backend
+python -m venv .venv
+source .venv/Scripts/activate
+python -m pip install -r requirements.txt
+```
+
+Optional, for better cut-outs on busy backgrounds (downloads a ~180 MB model on first use):
+
+```bash
+python -m pip install "rembg[cpu]"
+```
+
+**2. Go to the experiment folder and activate the environment**
 
 ```bash
 cd /c/Projects/stocksnap/experiments/mockup-poc
-source ../../backend/.venv/Scripts/activate      # has opencv + rembg already
-python mockup.py templates/gopal1 my_dress.jpg out/my_dress_on_gopal1.png --debug
+source ../../backend/.venv/Scripts/activate
 ```
 
-`--debug` also saves `*_layers.png` (green = idol kept on top, blue = old dress removed,
-yellow = where the skirt is laid, red = where the top piece goes) and `*_cutout.png`.
+**3. Add the scene image** - photos are not in the repo. Copy the idol scene into the
+template folder and name it `scene.png`:
+
+```bash
+cp /c/Projects/ai-edit-test/pink_final.png templates/gopal1/scene.png
+```
+
+`templates/gopal1/template.json` holds pixel positions for **this exact image (1122 × 1402)**.
+A different scene image needs its own template (see *Making a new template* below).
+
+**4. Add a dress photo** - a flat, round dress shot from straight above, top piece up,
+on a plain dark or light cloth:
+
+```bash
+cp /c/Projects/ai-edit-test/dress.jpg dress.jpg
+```
+
+**5. Make the mockup**
+
+```bash
+python mockup.py templates/gopal1 dress.jpg out/dress_on_gopal1.png --debug
+```
+
+It prints something like `{'seconds': 1.2, ...}` and saves:
+
+| File | What it is |
+|---|---|
+| `out/dress_on_gopal1.png` | the result: your real dress on the idol |
+| `out/dress_on_gopal1_layers.png` | check view: green = idol kept on top, blue = old dress removed, yellow = where the skirt is laid, red = where the top piece goes |
+| `out/dress_on_gopal1_cutout.png` | the cut-out dress |
+
+**6. Try more dresses** - same command, different photo and output name:
+
+```bash
+python mockup.py templates/gopal1 blue_dress.jpg out/blue_on_gopal1.png
+```
+
+**If something goes wrong**
+
+- *Slow first run, or an error about downloading a model:* rembg is fetching its model.
+  Skip it for dresses on plain cloth: `MOCKUP_NO_REMBG=1 python mockup.py templates/gopal1 dress.jpg out/test.png`
+- *"Couldn't read the template scene or the dress photo":* check the file names
+  (`dress.jpg` vs `dress.jpeg`) and that `templates/gopal1/scene.png` exists.
+- *`python: command not found` or missing `cv2`:* activate the environment again (step 2).
+- *Parts of the old dress or a cut-off arm in the result:* the scene isn't the one the
+  template was made for - see below.
+
+**Easier for other scenes:** in the StockSnap app, *Photos -> Your scenes* does the same
+thing for any image with an oval, a box and a brush instead of coordinates.
 
 ## How it works
 
