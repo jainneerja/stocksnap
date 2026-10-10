@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { scenes, type Scene, type Stroke } from "../api";
 import { PhotoButton } from "./PhotoButton";
 
-type Tool = "shape" | "keep" | "erase";
+type Tool = "shape" | "outline" | "keep" | "erase";
+type Pt = [number, number];
 type Drag =
   | { kind: "oval-move" | "oval-rx" | "oval-top" | "oval-bottom" | "box-move" | "box-tl" | "box-br"; x: number; y: number; orig: Geo }
   | null;
@@ -44,6 +45,29 @@ export function SceneEditor({
   });
   const [keep, setKeep] = useState<Stroke[]>(scene.keep);
   const [erase, setErase] = useState<Stroke[]>(scene.remove);
+  const [outlines, setOutlines] = useState<Pt[][]>(scene.keep_outlines ?? []);
+  const [drawingOutline, setDrawingOutline] = useState<Pt[]>([]);
+  const [history, setHistory] = useState<("keep" | "erase" | "outline")[]>([]);
+
+  function finishOutline(pts: Pt[] = drawingOutline) {
+    if (pts.length >= 3) {
+      setOutlines((o) => [...o, pts]);
+      setHistory((h) => [...h, "outline"]);
+      setDirty(true);
+    }
+    setDrawingOutline([]);
+  }
+
+  function undo() {
+    if (drawingOutline.length) return setDrawingOutline((d) => d.slice(0, -1));
+    const last = history[history.length - 1];
+    if (!last) return;
+    if (last === "outline") setOutlines((o) => o.slice(0, -1));
+    else if (last === "erase") setErase((r) => r.slice(0, -1));
+    else setKeep((k) => k.slice(0, -1));
+    setHistory((h) => h.slice(0, -1));
+    setDirty(true);
+  }
   const [tool, setTool] = useState<Tool>("shape");
   const [brush, setBrush] = useState(0.025);
   const [view, setView] = useState<"scene" | "layers">("scene");
@@ -84,6 +108,15 @@ export function SceneEditor({
   function onDown(e: React.PointerEvent) {
     if (tool === "shape") return;
     e.preventDefault();
+    if (tool === "outline") {
+      // click points round the arm / hand; click the first point again (or Finish) to close
+      const p = pos(e);
+      const first = drawingOutline[0];
+      if (first && drawingOutline.length >= 3 && Math.hypot(p[0] - first[0], (p[1] - first[1]) * aspect) < 0.02) {
+        finishOutline();
+      } else setDrawingOutline((d) => [...d, p]);
+      return;
+    }
     (e.target as Element).setPointerCapture?.(e.pointerId);
     const [x, y] = pos(e);
     drawing.current = { points: [[x, y]], r: brush };
@@ -136,6 +169,7 @@ export function SceneEditor({
       setLive(null);
       if (tool === "keep") setKeep((k) => [...k, s]);
       else setErase((r) => [...r, s]);
+      setHistory((h) => [...h, tool === "keep" ? "keep" : "erase"]);
       setDirty(true);
     }
   }
@@ -143,7 +177,7 @@ export function SceneEditor({
   async function save(): Promise<Scene | null> {
     setSaving(true);
     try {
-      const s = await scenes.update(scene.id, { ...geo, top_box: geo.top_box ?? [], keep, remove: erase, name });
+      const s = await scenes.update(scene.id, { ...geo, top_box: geo.top_box ?? [], keep, remove: erase, keep_outlines: outlines, name });
       setVersion((v) => v + 1);
       setDirty(false);
       onSaved(s);
@@ -204,19 +238,25 @@ export function SceneEditor({
       <ol className="steps small muted">
         <li><strong>Shape:</strong> drag the oval over where the product lies. Turn on the top-piece box for dresses with a bodice.</li>
         <li><strong>Check</strong> what the app found: <span className="sw blue" /> replaced, <span className="sw green" /> kept on top.</li>
-        <li>Brush <strong>Keep</strong> over hands or jewellery it missed, <strong>Erase</strong> over bits of the old product.</li>
+        <li><strong>Outline</strong> arms, hands or jewellery it removed (click points around each, click the first point to close) - the most exact. Or paint them with the <strong>Keep brush</strong>; <strong>Erase</strong> leftovers of the old product.</li>
         <li><strong>Try</strong> it with a real product photo.</li>
       </ol>
 
       <div className="scene-tools">
         <div className="seg" role="group" aria-label="Tool">
-          {(["shape", "keep", "erase"] as Tool[]).map((t) => (
+          {(["shape", "outline", "keep", "erase"] as Tool[]).map((t) => (
             <button key={t} className={tool === t ? "on" : ""} onClick={() => setTool(t)}>
-              {t === "shape" ? "Shape" : t === "keep" ? "Keep brush" : "Erase brush"}
+              {t === "shape" ? "Shape" : t === "outline" ? "Outline" : t === "keep" ? "Keep brush" : "Erase brush"}
             </button>
           ))}
         </div>
-        {tool !== "shape" && (
+        {tool === "outline" && (
+          <>
+            <button className="btn btn-secondary small" disabled={drawingOutline.length < 3} onClick={() => finishOutline()}>Finish outline</button>
+            <button className="link small" disabled={!drawingOutline.length} onClick={() => setDrawingOutline([])}>Cancel</button>
+          </>
+        )}
+        {(tool === "keep" || tool === "erase") && (
           <label className="inline small">
             Size
             <input type="range" min={0.008} max={0.08} step={0.002} value={brush} onChange={(e) => setBrush(Number(e.target.value))} />
@@ -240,9 +280,8 @@ export function SceneEditor({
             Top piece (bodice)
           </label>
         )}
-        <button className="link small" disabled={!keep.length && !erase.length}
-          onClick={() => { tool === "erase" ? setErase((r) => r.slice(0, -1)) : setKeep((k) => k.slice(0, -1)); setDirty(true); }}>
-          Undo stroke
+        <button className="link small" disabled={!history.length && !drawingOutline.length} onClick={undo}>
+          Undo
         </button>
         <div className="seg" role="group" aria-label="View">
           <button className={view === "scene" ? "on" : ""} onClick={() => setView("scene")}>Photo</button>
@@ -263,6 +302,15 @@ export function SceneEditor({
         >
           {keep.map((s, i) => <path key={`k${i}`} d={strokePath(s)} className="stroke keep" strokeWidth={s.r * 2 * W} />)}
           {erase.map((s, i) => <path key={`e${i}`} d={strokePath(s)} className="stroke erase" strokeWidth={s.r * 2 * W} />)}
+          {outlines.map((o, i) => (
+            <polygon key={`o${i}`} points={o.map(([x, y]) => `${x * W},${y * H}`).join(" ")} className="outline done" />
+          ))}
+          {drawingOutline.length > 0 && (
+            <g className="outline drawing">
+              <polyline points={drawingOutline.map(([x, y]) => `${x * W},${y * H}`).join(" ")} />
+              {drawingOutline.map(([x, y], i) => <circle key={i} cx={x * W} cy={y * H} r={i === 0 ? 0.012 * W : 0.006 * W} />)}
+            </g>
+          )}
           {live && <path d={strokePath(live)} className={`stroke ${tool}`} strokeWidth={live.r * 2 * W} />}
           <ellipse cx={geo.cx * W} cy={cy} rx={geo.rx * W} ry={ry} className="oval" onPointerDown={startDrag("oval-move")} />
           {box && (
@@ -314,7 +362,7 @@ export function SceneEditor({
 
       {checked && (
         <div className="notice small">
-          Arms, hands or jewellery missing in the preview? Pick <strong>Keep brush</strong>, paint over them, then
+          Arms, hands or jewellery missing in the preview? Use <strong>Outline</strong> (click round them) or the <strong>Keep brush</strong>, then
           <strong> Save &amp; check</strong> again. Bits of the old product still showing? Use <strong>Erase brush</strong>.
         </div>
       )}

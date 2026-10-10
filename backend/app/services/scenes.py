@@ -66,6 +66,9 @@ class SceneTemplate:
     top_outline: list[list[float]] = field(default_factory=lambda: [list(p) for p in DEFAULT_TOP_OUTLINE])
     keep: list[Stroke] = field(default_factory=list)  # always show the scene here (on top)
     remove: list[Stroke] = field(default_factory=list)  # always treat as old product
+    # exact outlines (polygons, fractions of the scene): precise for arms and hands
+    keep_outlines: list[list[list[float]]] = field(default_factory=list)
+    remove_outlines: list[list[list[float]]] = field(default_factory=list)
     shading: float = 0.5
     shadow: float = 0.38
     scale: float = 1.0  # new product size relative to the oval (the oval also marks what gets cleared)
@@ -131,6 +134,38 @@ def _strokes(t: SceneTemplate, strokes: list[Stroke]) -> np.ndarray:
     return m
 
 
+def _tidy_keep(m: np.ndarray, lab: np.ndarray, prod_centres: np.ndarray) -> np.ndarray:
+    sel = m > 0
+    if sel.sum() < 30 or not len(prod_centres):
+        return m
+    px = lab[sel]
+    own = np.median(px, axis=0)
+    d = np.linalg.norm(px[:, None, :] - prod_centres[None], axis=2)
+    nearest = d.argmin(axis=1)
+    alien = np.linalg.norm(prod_centres - own, axis=1) > 35  # product colours unlike this shape
+    far = np.linalg.norm(px - own, axis=1) > 45  # and the pixel itself looks nothing like the shape
+    drop = (d.min(axis=1) < 20) & alien[nearest] & far
+    piece = np.zeros_like(m)
+    piece[sel] = np.where(drop, 0, 255)
+    piece = cv2.morphologyEx(piece, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+    # biggest parts only, holes filled (a red dot on a ball stays)
+    n, cl, stats, _ = cv2.connectedComponentsWithStats(piece)
+    if n > 1:
+        big = stats[1:, cv2.CC_STAT_AREA].max()
+        piece = np.isin(cl, [i for i in range(1, n) if stats[i, cv2.CC_STAT_AREA] >= 0.15 * big]).astype(np.uint8) * 255
+    cnts, _ = cv2.findContours(piece, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cv2.drawContours(piece, cnts, -1, 255, -1)
+    return cv2.bitwise_and(piece, m)
+
+
+def _outlines(t: SceneTemplate, polys: list[list[list[float]]]) -> np.ndarray:
+    m = np.zeros((t.height, t.width), np.uint8)
+    for poly in polys:
+        if len(poly) >= 3:
+            cv2.fillPoly(m, [np.int32([[x * t.width, y * t.height] for x, y in poly])], 255, lineType=cv2.LINE_AA)
+    return m
+
+
 # ---------------------------------------------------------------- analysis
 
 
@@ -162,11 +197,13 @@ def analyse(scene: np.ndarray, t: SceneTemplate) -> tuple[np.ndarray, np.ndarray
     sample = ref[rng.choice(len(ref), size=min(len(ref), 40000), replace=False)]
     k = 10
     crit = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.5)
+    cv2.setRNGSeed(0)  # same scene + same marks = same result every time
     _, _, centres = cv2.kmeans(sample, k, None, crit, 2, cv2.KMEANS_PP_CENTERS)
 
     ring_lbl = np.linalg.norm(ref[:, None, :] - centres[None], axis=2).argmin(axis=1)
     share = np.bincount(ring_lbl, minlength=k) / max(len(ring_lbl), 1)
     prod_centres = centres[share >= t.sensitivity]
+    main_centres = centres[share >= 0.12]  # the product's main fabric colours
 
     # product = close to one of the product's colours (Lab distance)
     grow = cv2.dilate(region, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (int(0.2 * w) | 1,) * 2))
@@ -224,8 +261,15 @@ def analyse(scene: np.ndarray, t: SceneTemplate) -> tuple[np.ndarray, np.ndarray
     old = cv2.bitwise_or(cv2.bitwise_and(region, cv2.bitwise_not(keep)), spill)
     old = cv2.morphologyEx(old, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
 
-    # the seller's corrections win
-    k_strokes, r_strokes = _strokes(t, t.keep), _strokes(t, t.remove)
+    # the seller's corrections win (brush strokes and outlines). Inside each kept
+    # shape, pixels in one of the old product's main colours that is clearly
+    # different from the shape's own colour (pink fabric round a gold arm) are
+    # dropped, so a slightly loose outline still gives a clean edge.
+    r_strokes = _strokes(t, t.remove) | _outlines(t, t.remove_outlines)
+    shapes = [_strokes(t, [s]) for s in t.keep] + [_outlines(t, [p]) for p in t.keep_outlines]
+    k_strokes = np.zeros((h, w), np.uint8)
+    for m in shapes:
+        k_strokes |= _tidy_keep(m, lab, main_centres)
     keep = cv2.bitwise_and(cv2.bitwise_or(keep, k_strokes), cv2.bitwise_not(r_strokes))
     old = cv2.bitwise_and(cv2.bitwise_or(old, r_strokes), cv2.bitwise_not(keep))
     return old, keep

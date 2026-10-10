@@ -80,6 +80,8 @@ class SceneUpdate(BaseModel):
     top_box: Optional[list[float]] = None  # [] = no top piece
     keep: Optional[list[StrokeIn]] = Field(default=None, max_length=200)
     remove: Optional[list[StrokeIn]] = Field(default=None, max_length=200)
+    keep_outlines: Optional[list[list[list[float]]]] = Field(default=None, max_length=50)
+    remove_outlines: Optional[list[list[list[float]]]] = Field(default=None, max_length=50)
     shading: Optional[float] = Field(default=None, ge=0, le=1)
     shadow: Optional[float] = Field(default=None, ge=0, le=1)
     scale: Optional[float] = Field(default=None, ge=0.5, le=1.2)

@@ -57,7 +57,7 @@ Upload one nice photo of your setup (your own idol and mandir, a styled table, o
 
 1. Drag the oval over where the product lies, and the box over the chest if the product has a top piece (bodice).
 2. **Save & check**: the app finds the old product by its colours and removes it; anything else (hands, jewellery, hair) stays on top. Blue = replaced, green = kept.
-3. Brush **Keep** over parts it missed (e.g. gold arms next to gold sequins) or **Erase** over leftovers.
+3. **Outline** parts it removed by clicking points around them (e.g. gold arms next to gold sequins) - the most exact - or paint them with the **Keep** brush; **Erase** leftovers. Set the new product's size with **Dress size**.
 4. Try it with a product photo.
 
 After a **bulk add**, *Listing photos* puts every saved product into your scenes (same scenes for all, or chosen per product), plus an optional white main image, and downloads one ZIP with a folder per SKU (`SKU.MAIN.jpg`, `SKU.PT01.jpg`…). The Photos tab offers the same for single photos.

@@ -391,3 +391,8 @@ label.inline select { width: auto; }
 .scene-work { display: grid; gap: 14px; align-items: start; }
 @media (min-width: 1000px) { .scene-work { grid-template-columns: 1fr 1fr; } .scene-editor { max-width: 1280px; } }
 .scene-work .scene-result { margin: 0; }
+.scene-canvas.tool-outline svg { cursor: crosshair; }
+.scene-canvas.tool-outline .oval, .scene-canvas.tool-outline .topbox { pointer-events: none; }
+.scene-canvas .outline.done { fill: rgba(46, 204, 64, 0.35); stroke: #2ecc40; stroke-width: 2; vector-effect: non-scaling-stroke; pointer-events: none; }
+.scene-canvas .outline.drawing polyline { fill: none; stroke: #2ecc40; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.scene-canvas .outline.drawing circle { fill: #2ecc40; stroke: #fff; stroke-width: 1.5; vector-effect: non-scaling-stroke; pointer-events: none; }

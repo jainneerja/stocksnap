@@ -481,6 +481,8 @@ export interface Scene {
   top_box: [number, number, number, number] | null;
   keep: Stroke[];
   remove: Stroke[];
+  keep_outlines: [number, number][][]; // exact outlines (polygons), fractions of the scene
+  remove_outlines: [number, number][][];
   shading: number;
   shadow: number;
   scale: number;
