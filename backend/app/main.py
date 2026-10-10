@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import __version__
 from .config import Settings
-from .routers import batches, items, lab, reports, sales, scan, shops, system
+from .routers import batches, items, lab, scenes, reports, sales, scan, shops, system
 from .services.ai import AI
 from .services.imagelab import ImageLab
 from .services.shops import ShopRegistry
@@ -44,7 +44,7 @@ def create_app(settings: Optional[Settings] = None, ai: Optional[AI] = None,
         allow_headers=["*"],
     )
 
-    for r in (shops, items, scan, batches, lab, sales, reports, system):
+    for r in (shops, items, scan, batches, lab, scenes, sales, reports, system):
         app.include_router(r.router)
 
     # Serve the built React app, so a single `uvicorn` command runs everything.

@@ -44,6 +44,7 @@ async def create_job(
     ai_count: int = Form(2),
     title: str = Form(""),
     bullets: str = Form(""),
+    scene_ids: str = Form(""),
 ):
     data = await file.read()
     if len(data) > MAX_UPLOAD:
@@ -61,6 +62,7 @@ async def create_job(
         looks=chosen, scene=scene, custom_prompt=custom_prompt[:300], ai_count=max(1, min(ai_count, 4)),
         title=title[:120], bullets=[b[:160] for b in bullets.splitlines() if b.strip()][:5],
         brand=current_shop(request).info.name,
+        scene_ids=[s for s in scene_ids.split(",") if s][:6],
     )
     lab = request.app.state.lab
     root = _root(request)

@@ -443,8 +443,9 @@ export const lab = {
   status: () => req<LabStatus>("/api/lab/status"),
   jobs: () => req<LabJob[]>("/api/lab/jobs"),
   job: (id: string) => req<LabJob>(`/api/lab/jobs/${id}`),
-  create: (file: Blob, opts: { looks: string[]; scene: string; custom_prompt: string; ai_count: number; title: string; bullets: string }) => {
+  create: (file: Blob, opts: { looks: string[]; scene: string; custom_prompt: string; ai_count: number; title: string; bullets: string; scene_ids?: string[] }) => {
     const fd = new FormData();
+    fd.append("scene_ids", (opts.scene_ids ?? []).join(","));
     fd.append("file", file, "photo.jpg");
     fd.append("looks", opts.looks.join(","));
     fd.append("scene", opts.scene);
@@ -457,4 +458,80 @@ export const lab = {
   remove: (id: string) => req<void>(`/api/lab/jobs/${id}`, { method: "DELETE" }),
   fileUrl: (id: string, name: string) => `/api/lab/files/${id}/${name}`,
   zipUrl: (id: string, prefix: string) => `/api/lab/jobs/${id}/zip${qs({ prefix })}`,
+};
+
+// ---------------------------------------------------------------- scenes
+
+export interface Stroke {
+  points: [number, number][]; // fractions of the scene
+  r: number; // brush radius, fraction of the scene width
+}
+
+export interface Scene {
+  id: string;
+  name: string;
+  width: number;
+  height: number;
+  created: number;
+  cx: number;
+  top: number;
+  bottom: number;
+  rx: number;
+  tilt: number;
+  top_box: [number, number, number, number] | null;
+  keep: Stroke[];
+  remove: Stroke[];
+  shading: number;
+  shadow: number;
+}
+
+export type SceneUpdate = Partial<Omit<Scene, "id" | "width" | "height" | "created" | "top_box">> & {
+  top_box?: [number, number, number, number] | [];
+};
+
+export const scenes = {
+  list: () => req<Scene[]>("/api/scenes"),
+  create: (file: Blob, name: string) => {
+    const fd = new FormData();
+    fd.append("file", file, "scene.jpg");
+    fd.append("name", name);
+    return req<Scene>("/api/scenes", { method: "POST", body: fd });
+  },
+  update: (id: string, data: SceneUpdate) => req<Scene>(`/api/scenes/${id}`, json("PUT", data)),
+  remove: (id: string) => req<void>(`/api/scenes/${id}`, { method: "DELETE" }),
+  fileUrl: (id: string, name: "scene.jpg" | "layers.jpg" | "thumb.jpg", v = 0) => `/api/scenes/${id}/files/${name}?v=${v}`,
+  /** Render a product photo (or a saved item) into the scene; returns an object URL. */
+  tryOn: async (id: string, src: { file?: Blob; itemId?: number }) => {
+    const fd = new FormData();
+    if (src.file) fd.append("file", src.file, "product.jpg");
+    if (src.itemId != null) fd.append("item_id", String(src.itemId));
+    const r = await fetch(`/api/scenes/${id}/try`, { method: "POST", body: fd });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail ?? "Couldn't make the preview");
+    return URL.createObjectURL(await r.blob());
+  },
+};
+
+export interface ListingOutput {
+  item_id: number;
+  sku: string;
+  file: string;
+  label: string;
+}
+
+export interface ListingJob {
+  id: string;
+  status: "queued" | "running" | "done";
+  done: number;
+  total: number;
+  outputs: ListingOutput[];
+  notes: string[];
+  total_s: number;
+}
+
+export const listing = {
+  create: (items: { item_id: number; scene_ids: string[] }[], white: boolean) =>
+    req<ListingJob>("/api/listing-photos", json("POST", { items, white })),
+  get: (id: string) => req<ListingJob>(`/api/listing-photos/${id}`),
+  fileUrl: (id: string, name: string) => `/api/listing-photos/${id}/files/${name}`,
+  zipUrl: (id: string) => `/api/listing-photos/${id}/zip`,
 };

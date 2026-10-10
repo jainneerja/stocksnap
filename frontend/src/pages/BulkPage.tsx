@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { barcodeUrl, bulk, imageUrl, type Batch, type BatchPhoto, type Group, type Item, type Preset } from "../api";
+import { ListingPhotos } from "../components/ListingPhotos";
 import { PhotoButton } from "../components/PhotoButton";
 import { money, toCents, toDollars } from "../format";
 import { useShop } from "../shop";
@@ -41,7 +42,7 @@ export function BulkPage({ toast, aiReady }: { toast: (m: string) => void; aiRea
       />
     );
   if (view.kind === "labels")
-    return <Labels batch={view.batch} items={view.items} onDone={() => setView({ kind: "home" })} />;
+    return <Labels batch={view.batch} items={view.items} toast={toast} onDone={() => setView({ kind: "home" })} />;
 
   return <Home presets={presets} toast={toast} onPick={(p) => setView({ kind: "setup", preset: p })} onOpen={(id) => setView({ kind: "batch", id })} />;
 }
@@ -545,7 +546,7 @@ function GroupRow({
 
 // ---------------------------------------------------------------- labels
 
-function Labels({ batch, items, onDone }: { batch: Batch; items: Item[]; onDone: () => void }) {
+function Labels({ batch, items, onDone, toast }: { batch: Batch; items: Item[]; onDone: () => void; toast: (m: string) => void }) {
   const { shop } = useShop();
   const units = (it: Item) => batch.groups.find((g) => g.item?.id === it.id)?.count ?? 1;
   const numberOf = (it: Item) => batch.groups.find((g) => g.item?.id === it.id)?.numbers[0];
@@ -569,6 +570,7 @@ function Labels({ batch, items, onDone }: { batch: Batch; items: Item[]; onDone:
             <input type="checkbox" checked={perUnit} onChange={(e) => setPerUnit(e.target.checked)} /> One label per unit (not per product)
           </label>
         )}
+        <ListingPhotos items={items} toast={toast} />
       </div>
       <div className="labels">
         {labels.map((it, i) => (

@@ -46,6 +46,7 @@ LOOKS = {
     "tabletop": "Tabletop",
     "closeup": "Close-up",
     "card": "Details card",
+    "in_scene": "In your scenes",
     "ai_scene": "AI scene",
 }
 
@@ -84,18 +85,23 @@ class Cutter:
                 "hint": "pip install -r requirements-imagelab.txt for much better cut-outs"}
 
     def cut(self, img: Image.Image) -> Image.Image:
+        mask = None
         if self.engine == "rembg":
-            from rembg import new_session, remove
+            try:
+                from rembg import new_session, remove
 
-            with self._lock:
-                if self._session is None:
-                    self._session = new_session(self.model)
-            # rembg works at its own resolution; run on a ~1600 px copy and scale the mask back
-            work = img.copy()
-            work.thumbnail((1600, 1600))
-            mask = remove(work, session=self._session, only_mask=True).convert("L")
-            mask = mask.resize(img.size, Image.LANCZOS)
-        else:
+                with self._lock:
+                    if self._session is None:
+                        self._session = new_session(self.model)
+                # rembg works at its own resolution; run on a ~1600 px copy and scale the mask back
+                work = img.copy()
+                work.thumbnail((1600, 1600))
+                mask = remove(work, session=self._session, only_mask=True).convert("L")
+                mask = mask.resize(img.size, Image.LANCZOS)
+            except Exception as exc:  # noqa: BLE001 - e.g. the model can't be downloaded offline
+                log.warning("rembg failed, using the basic cut-out: %s", exc)
+                self.engine = "basic"
+        if mask is None:
             mask = _grabcut_mask(img)
         out = img.convert("RGBA")
         out.putalpha(mask)
@@ -384,6 +390,7 @@ class LabOptions:
     title: str = ""
     bullets: Optional[list[str]] = None
     brand: str = ""
+    scene_ids: Optional[list[str]] = None
 
 
 class ImageLab:
@@ -477,6 +484,18 @@ class ImageLab:
                 elif key == "card":
                     step("Details card…")
                     add(key, LOOKS[key], details_card(cut, o.title, o.bullets or [], o.brand), time.time() - t)
+                elif key == "in_scene":
+                    from .scenes import SceneStore
+
+                    store = SceneStore(root.parent / "scenes")
+                    for sid in o.scene_ids or []:
+                        t = time.time()
+                        try:
+                            name = store.get(sid).name
+                            step(f"Putting it in your scene '{name}'…")
+                            add(key, name, store.render(sid, original, cut), time.time() - t)
+                        except FileNotFoundError:
+                            job["notes"].append("A chosen scene was deleted - skipped.")
                 elif key == "ai_scene":
                     if not self.generator.installed:
                         job["notes"].append("AI scenes skipped: the image model isn't installed "

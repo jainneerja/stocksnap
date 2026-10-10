@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { lab, type LabJob, type LabStatus } from "../api";
+import { lab, scenes, type LabJob, type LabStatus, type Scene } from "../api";
 import { PhotoButton } from "../components/PhotoButton";
+import { SceneEditor } from "../components/SceneEditor";
 import { useShop } from "../shop";
 
 const SCENE_LABELS: Record<string, string> = {
@@ -26,6 +27,33 @@ export function LabPage({ toast }: { toast: (m: string) => void }) {
   const [job, setJob] = useState<LabJob | null>(null);
   const [recent, setRecent] = useState<LabJob[]>([]);
   const [prefix, setPrefix] = useState(`${shop.sku_prefix || "IMG"}-00001`);
+  const [sceneList, setSceneList] = useState<Scene[]>([]);
+  const [editing, setEditing] = useState<Scene | null>(null);
+  const [pickedScenes, setPickedScenes] = useState<string[]>([]);
+  const [addingScene, setAddingScene] = useState(false);
+
+  const loadScenes = useCallback(
+    () => scenes.list().then((s) => {
+      setSceneList(s);
+      setPickedScenes((p) => (p.length ? p.filter((id) => s.some((x) => x.id === id)) : s.slice(0, 1).map((x) => x.id)));
+      if (s.length) setLooks((l) => (l.includes("in_scene") ? l : [...l, "in_scene"]));
+    }).catch(() => undefined),
+    [],
+  );
+  useEffect(() => { loadScenes(); }, [loadScenes]);
+
+  async function addScene(f: File) {
+    setAddingScene(true);
+    try {
+      const s = await scenes.create(f, f.name.replace(/\.[^.]+$/, "").slice(0, 60) || "Scene");
+      await loadScenes();
+      setEditing(s);
+    } catch (e) {
+      toast((e as Error).message);
+    } finally {
+      setAddingScene(false);
+    }
+  }
 
   const loadRecent = useCallback(() => lab.jobs().then(setRecent).catch(() => undefined), []);
 
@@ -65,7 +93,7 @@ export function LabPage({ toast }: { toast: (m: string) => void }) {
     if (!file) return toast("Choose a product photo first");
     if (!looks.length) return toast("Pick at least one look");
     try {
-      setJob(await lab.create(file, { looks, scene, custom_prompt: custom, ai_count: aiCount, title, bullets }));
+      setJob(await lab.create(file, { looks, scene, custom_prompt: custom, ai_count: aiCount, title, bullets, scene_ids: pickedScenes }));
     } catch (e) {
       toast((e as Error).message);
     }
@@ -74,6 +102,23 @@ export function LabPage({ toast }: { toast: (m: string) => void }) {
   const toggle = (k: string) => setLooks((l) => (l.includes(k) ? l.filter((x) => x !== k) : [...l, k]));
   const running = job && (job.status === "queued" || job.status === "running");
   const gen = status?.generator;
+
+  if (editing)
+    return (
+      <SceneEditor
+        key={editing.id}
+        scene={editing}
+        toast={toast}
+        onSaved={(s) => setSceneList((l) => l.map((x) => (x.id === s.id ? s : x)))}
+        onClose={() => { setEditing(null); loadScenes(); }}
+        onDelete={async () => {
+          await scenes.remove(editing.id);
+          setEditing(null);
+          loadScenes();
+          toast("Scene deleted");
+        }}
+      />
+    );
 
   return (
     <section>
@@ -99,6 +144,23 @@ export function LabPage({ toast }: { toast: (m: string) => void }) {
         </div>
       )}
 
+      <div className="your-scenes">
+        <h2>Your scenes</h2>
+        <p className="muted small">
+          A scene is one nice photo of your setup (or any base image) that your products are placed into, keeping every
+          detail of the real product. Set it up once, use it for every product.
+        </p>
+        <div className="scene-picks">
+          {sceneList.map((s) => (
+            <button key={s.id} className="scene-pick" onClick={() => setEditing(s)} title="Adjust this scene">
+              <img src={scenes.fileUrl(s.id, "thumb.jpg", Math.round(s.created))} alt="" />
+              <span className="small">{s.name}</span>
+            </button>
+          ))}
+          <PhotoButton label={addingScene ? "Adding…" : "+ Add a scene"} onPhoto={addScene} variant="secondary" multiple={false} disabled={addingScene} />
+        </div>
+      </div>
+
       <div className="lab-grid">
         <div className="lab-left">
           <div className="lab-photo">
@@ -119,13 +181,27 @@ export function LabPage({ toast }: { toast: (m: string) => void }) {
                   key={k}
                   className={`fchip ${looks.includes(k) ? "on" : ""}`}
                   onClick={() => toggle(k)}
-                  disabled={k === "ai_scene" && !gen?.available}
-                  title={k === "ai_scene" && !gen?.available ? "Install the AI image extras first" : ""}
+                  disabled={(k === "ai_scene" && !gen?.available) || (k === "in_scene" && !sceneList.length)}
+                  title={k === "ai_scene" && !gen?.available ? "Install the AI image extras first" : k === "in_scene" && !sceneList.length ? "Add a scene first" : ""}
                 >
                   {label}
                 </button>
               ))}
           </div>
+
+          {looks.includes("in_scene") && sceneList.length > 0 && (
+            <div className="lab-box">
+              <strong>Your scenes</strong>
+              <div className="look-chips">
+                {sceneList.map((s) => (
+                  <button key={s.id} className={`fchip ${pickedScenes.includes(s.id) ? "on" : ""}`}
+                    onClick={() => setPickedScenes((p) => (p.includes(s.id) ? p.filter((x) => x !== s.id) : [...p, s.id]))}>
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {looks.includes("ai_scene") && (
             <div className="lab-box">

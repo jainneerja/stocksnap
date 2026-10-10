@@ -359,3 +359,32 @@ label.inline select { width: auto; }
 @media (max-width: 560px) { .mode-cards { grid-template-columns: 1fr; } }
 .desc-preview { background: var(--brand-soft); border-radius: 10px; padding: 10px 12px; display: grid; gap: 2px; }
 .drafted { margin: 0 0 8px; }
+
+/* Scenes */
+.your-scenes { margin: 8px 0 18px; }
+.scene-picks { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.scene-pick { display: grid; gap: 4px; width: 110px; padding: 6px; border: 2px solid var(--line); border-radius: 12px; background: var(--surface); cursor: pointer; text-align: left; }
+.scene-pick img { width: 100%; aspect-ratio: 4 / 5; object-fit: cover; border-radius: 8px; }
+.scene-pick.on { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft); }
+.scene-editor .scene-name { font-size: 1.3rem; font-weight: 700; max-width: 420px; }
+.scene-editor .steps { padding-left: 20px; margin: 6px 0 12px; display: grid; gap: 2px; }
+.sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; }
+.sw.blue { background: #2878ff; } .sw.green { background: #3cdc3c; }
+.scene-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 10px; }
+.scene-canvas { position: relative; max-width: 640px; border-radius: 12px; overflow: hidden; touch-action: none; user-select: none; }
+.scene-canvas img { display: block; width: 100%; height: auto; pointer-events: none; }
+.scene-canvas svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.scene-canvas.tool-keep svg, .scene-canvas.tool-erase svg { cursor: crosshair; }
+.scene-canvas .oval { fill: rgba(255, 210, 0, 0.12); stroke: #ffd200; stroke-width: 3; vector-effect: non-scaling-stroke; cursor: move; }
+.scene-canvas .topbox { fill: rgba(255, 60, 60, 0.12); stroke: #ff4d4d; stroke-width: 3; vector-effect: non-scaling-stroke; cursor: move; }
+.scene-canvas.tool-keep .oval, .scene-canvas.tool-keep .topbox, .scene-canvas.tool-erase .oval, .scene-canvas.tool-erase .topbox { pointer-events: none; }
+.scene-canvas .handles circle { fill: #fff; stroke: #333; stroke-width: 2; vector-effect: non-scaling-stroke; cursor: grab; }
+.scene-canvas .stroke { fill: none; stroke-linecap: round; stroke-linejoin: round; opacity: 0.55; pointer-events: none; }
+.scene-canvas .stroke.keep { stroke: #2ecc40; }
+.scene-canvas .stroke.erase { stroke: #ff3b3b; }
+.scene-result { max-width: 640px; margin: 12px 0; }
+.scene-result img { width: 100%; border-radius: 12px; }
+.listing-photos { margin-top: 22px; border-top: 1px solid var(--line); padding-top: 14px; }
+.per-item { list-style: none; padding: 0; display: grid; gap: 8px; }
+.per-item li { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.per-item img { width: 44px; height: 44px; object-fit: cover; border-radius: 8px; }

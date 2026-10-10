@@ -51,6 +51,19 @@ On a laptop CPU, most of the AI's time goes into *writing words*, so StockSnap l
 
 Templates use blanks like `{colour} {type}[ with {pattern}]. [Size {size}. ]Made with care by {shop}.` Anything in square brackets disappears when its blank is unknown. Every listing reads in the shop's own style, and if the AI isn't running, Fast falls back to Instant.
 
+## Your scenes: real products in your own setting
+
+Upload one nice photo of your setup (your own idol and mandir, a styled table, or any base image made once with an AI tool) and turn it into a **scene**:
+
+1. Drag the oval over where the product lies, and the box over the chest if the product has a top piece (bodice).
+2. **Save & check**: the app finds the old product by its colours and removes it; anything else (hands, jewellery, hair) stays on top. Blue = replaced, green = kept.
+3. Brush **Keep** over parts it missed (e.g. gold arms next to gold sequins) or **Erase** over leftovers.
+4. Try it with a product photo.
+
+After a **bulk add**, *Listing photos* puts every saved product into your scenes (same scenes for all, or chosen per product), plus an optional white main image, and downloads one ZIP with a folder per SKU (`SKU.MAIN.jpg`, `SKU.PT01.jpg`…). The Photos tab offers the same for single photos.
+
+It's image processing, not generative AI: about half a second per image on any laptop, and the product is always the seller's real photo, so colours and embroidery are exact.
+
 ## Tell the AI what you sell
 
 A small vision model only sees shapes and colours, so it can call a round embroidered outfit a "hat". You can tell it what your items really are, in your own words, in three places:
