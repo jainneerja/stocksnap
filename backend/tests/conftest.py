@@ -28,12 +28,21 @@ class FakeVision:
         self.hints: list[str] = []
         self.sellers: list[str] = []
         self.fact_calls = 0
+        self.boxes = {}
+        self.located = []
         self.pattern = "floral print"
         self.read_text = False
         self.label_reader = None  # optional fn(img, hint) -> Draft, set by tests
 
     def status(self):
         return {"available": not self.fail, "model": self.model, "detail": "fake"}
+
+    def locate(self, image, labels):
+        """Pretend to find things: tests set self.boxes = {label: [[x0,y0,x1,y1], ...]}."""
+        if self.fail:
+            raise VisionUnavailable("down")
+        self.located.append(list(labels))
+        return {k: v for k, v in self.boxes.items() if k in labels}
 
     def facts(self, images, hint="", seller=""):
         """Fast mode: derived from the same fake so tests stay simple."""

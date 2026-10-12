@@ -398,6 +398,86 @@ def layers_preview(scene: np.ndarray, t: SceneTemplate, old: np.ndarray, keep: n
     return img
 
 
+# ---------------------------------------------------------------- auto set-up
+
+
+def trace_in_box(scene: np.ndarray, box: list[float], max_points: int = 40) -> Optional[list[list[float]]]:
+    """Exact outline of the thing inside a box (GrabCut: the box edge is
+    background, the object is what stands out inside it). Fractions of the scene."""
+    h, w = scene.shape[:2]
+    x0, y0, x1, y1 = box
+    # pad a little: model boxes are often tight
+    px, py = 0.08 * (x1 - x0), 0.08 * (y1 - y0)
+    X0, Y0 = max(int((x0 - px) * w), 0), max(int((y0 - py) * h), 0)
+    X1, Y1 = min(int((x1 + px) * w), w - 1), min(int((y1 + py) * h), h - 1)
+    if X1 - X0 < 8 or Y1 - Y0 < 8:
+        return None
+    pad = 12
+    cx0, cy0 = max(X0 - pad, 0), max(Y0 - pad, 0)
+    cx1, cy1 = min(X1 + pad, w - 1), min(Y1 + pad, h - 1)
+    crop = scene[cy0:cy1 + 1, cx0:cx1 + 1]
+    rect = (X0 - cx0, Y0 - cy0, X1 - X0, Y1 - Y0)
+    mask = np.zeros(crop.shape[:2], np.uint8)
+    try:
+        bgd, fgd = np.zeros((1, 65), np.float64), np.zeros((1, 65), np.float64)
+        cv2.grabCut(crop, mask, rect, bgd, fgd, 5, cv2.GC_INIT_WITH_RECT)
+    except cv2.error:
+        return None
+    fg = np.where((mask == cv2.GC_FGD) | (mask == cv2.GC_PR_FGD), 255, 0).astype(np.uint8)
+    fg = cv2.morphologyEx(fg, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
+    cnts, _ = cv2.findContours(fg, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not cnts:
+        return None
+    c = max(cnts, key=cv2.contourArea)
+    if cv2.contourArea(c) < 0.15 * (X1 - X0) * (Y1 - Y0):
+        # GrabCut found next to nothing: fall back to the box itself
+        c = np.array([[[X0 - cx0, Y0 - cy0]], [[X1 - cx0, Y0 - cy0]], [[X1 - cx0, Y1 - cy0]], [[X0 - cx0, Y1 - cy0]]])
+    eps = 0.003 * cv2.arcLength(c, True)
+    approx = cv2.approxPolyDP(c, eps, True)
+    while len(approx) > max_points:
+        eps *= 1.4
+        approx = cv2.approxPolyDP(c, eps, True)
+    return [[(p[0][0] + cx0) / w, (p[0][1] + cy0) / h] for p in approx]
+
+
+def apply_found(t: SceneTemplate, scene: np.ndarray, found: dict[str, list[list[float]]],
+                product: str, top_piece: Optional[str], keep: list[str]) -> list[str]:
+    """Turn boxes found by the vision model into the scene's marks. Returns notes."""
+    notes = []
+    boxes = found.get(product) or []
+    if boxes:
+        # the biggest box is the product
+        x0, y0, x1, y1 = max(boxes, key=lambda b: (b[2] - b[0]) * (b[3] - b[1]))
+        t.cx, t.rx = (x0 + x1) / 2, max((x1 - x0) / 2, 0.05)
+        t.top, t.bottom = y0, max(y1, y0 + 0.06)
+    else:
+        notes.append(f"Couldn't find the {product} - drag the oval yourself.")
+    if top_piece:
+        tb = found.get(top_piece) or []
+        faces = found.get("face") or []
+        if tb:
+            x0, y0, x1, y1 = max(tb, key=lambda b: (b[2] - b[0]) * (b[3] - b[1]))
+            if faces:  # neckline never above the chin
+                y0 = max(y0, max(f[3] for f in faces))
+            if y1 - y0 > 0.03:
+                t.top_box = [x0, y0, x1, y1]
+        else:
+            notes.append(f"Couldn't find the {top_piece} - turn on the top-piece box yourself if needed.")
+    outlines, missing = [], []
+    for label in keep:
+        got = found.get(label) or []
+        if not got:
+            missing.append(label)
+        for b in got:
+            poly = trace_in_box(scene, b)
+            if poly and len(poly) >= 3:
+                outlines.append(poly)
+    t.keep_outlines = outlines
+    if missing:
+        notes.append("Not found: " + ", ".join(missing) + ". Outline them yourself if they should stay on top.")
+    return notes
+
+
 # ---------------------------------------------------------------- storage
 
 

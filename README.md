@@ -55,6 +55,10 @@ Templates use blanks like `{colour} {type}[ with {pattern}]. [Size {size}. ]Made
 
 Upload one nice photo of your setup (your own idol and mandir, a styled table, or any base image made once with an AI tool) and turn it into a **scene**:
 
+**Quickest:** click **Set up automatically**, type what should be replaced (`dress`) and what should stay on top (`hand, arm, necklace, anything held in a hand`), and press **Find them for me**. The local vision model (Qwen2.5-VL via Ollama) finds each one; the app places the oval and box and traces exact outlines inside what it found. Takes about 1-2 minutes on a laptop CPU, once per scene. Then check and fix anything with the tools below.
+
+By hand:
+
 1. Drag the oval over where the product lies, and the box over the chest if the product has a top piece (bodice).
 2. **Save & check**: the app finds the old product by its colours and removes it; anything else (hands, jewellery, hair) stays on top. Blue = replaced, green = kept.
 3. **Outline** parts it removed by clicking points around them (e.g. gold arms next to gold sequins) - the most exact - or paint them with the **Keep** brush; **Erase** leftovers. Set the new product's size with **Dress size**.

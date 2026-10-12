@@ -124,6 +124,48 @@ def update_scene(scene_id: str, body: SceneUpdate, request: Request):
     return store.save(t).to_dict()
 
 
+class AutoSetup(BaseModel):
+    product: str = Field(default="dress", min_length=1, max_length=60)
+    keep: str = Field(default="hand, arm, necklace, anything held in a hand", max_length=300)
+    top_piece: bool = True  # the product has a top part on the chest (bodice)
+
+
+@router.post("/api/scenes/{scene_id}/auto")
+def auto_setup(scene_id: str, body: AutoSetup, request: Request):
+    """'Find them for me': the local vision model finds the product, its top
+    part, the face and whatever should stay on top; the app turns that into the
+    oval, the top-piece box and exact outlines."""
+    import cv2
+
+    from ..services.scenes import apply_found
+    from ..services.vision import VisionUnavailable
+
+    store = _store(request)
+    t = _get(store, scene_id)
+    product = body.product.strip().lower()
+    keep = [k.strip().lower() for k in re.split(r"[,;\n]", body.keep) if k.strip()][:8]
+    top_label = f"top part of the {product} on the chest" if body.top_piece else None
+    labels = [product, *([top_label] if top_label else []), "face", *keep]
+    vision = request.app.state.ai.vision
+    if not hasattr(vision, "locate"):
+        raise HTTPException(503, "This AI model can't find things in pictures.")
+    d = store.dir(scene_id)
+    start = time.time()
+    try:
+        found = vision.locate(Image.open(d / "scene.jpg"), labels)
+    except VisionUnavailable:
+        raise HTTPException(503, "The local AI isn't running. Start Ollama, or set the scene up by hand.")
+    scene = cv2.imread(str(d / "scene.jpg"))
+    if not body.top_piece:
+        t.top_box = None
+        keep = [*keep, "face"]
+    notes = apply_found(t, scene, found, product, top_label, keep)
+    t.keep, t.remove = [], []
+    store.save(t)
+    return {"scene": t.to_dict(), "notes": notes, "seconds": round(time.time() - start, 1),
+            "found": {k: len(v) for k, v in found.items()}}
+
+
 @router.delete("/api/scenes/{scene_id}", status_code=204)
 def delete_scene(scene_id: str, request: Request):
     store = _store(request)

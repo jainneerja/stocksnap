@@ -201,6 +201,38 @@ export function SceneEditor({
   }
 
   const [checked, setChecked] = useState(false);
+  const fresh = !scene.keep_outlines?.length && !scene.keep.length;
+  const [autoProduct, setAutoProduct] = useState("dress");
+  const [autoKeep, setAutoKeep] = useState("hand, arm, necklace, anything held in a hand");
+  const [autoTop, setAutoTop] = useState(true);
+  const [autoBusy, setAutoBusy] = useState(false);
+  const [autoNotes, setAutoNotes] = useState<string[]>([]);
+
+  async function autoSetup() {
+    setAutoBusy(true);
+    setAutoNotes([]);
+    try {
+      const r = await scenes.auto(scene.id, { product: autoProduct, keep: autoKeep, top_piece: autoTop });
+      const s = r.scene;
+      setGeo({ cx: s.cx, top: s.top, bottom: s.bottom, rx: s.rx, tilt: s.tilt, scale: s.scale ?? 1, top_box: s.top_box });
+      setOutlines(s.keep_outlines ?? []);
+      setKeep(s.keep);
+      setErase(s.remove);
+      setHistory([]);
+      setDrawingOutline([]);
+      setDirty(false);
+      setVersion((v) => v + 1);
+      setView("layers");
+      setChecked(true);
+      setAutoNotes([`Done in ${r.seconds} s.`, ...r.notes]);
+      onSaved(s);
+      if (product) await render(product);
+    } catch (e) {
+      toast((e as Error).message);
+    } finally {
+      setAutoBusy(false);
+    }
+  }
 
   // One loop: save, show what was found, and (if a product was tried) show it again.
   async function check() {
@@ -244,6 +276,26 @@ export function SceneEditor({
       <div className="page-head">
         <input className="scene-name" value={name} maxLength={60} onChange={(e) => { setName(e.target.value); setDirty(true); }} aria-label="Scene name" />
       </div>
+
+      <details className="auto-setup" open={fresh}>
+        <summary><strong>Set up automatically</strong> <span className="muted small">- tell the local AI what's what</span></summary>
+        <label>
+          What should be replaced?
+          <input value={autoProduct} maxLength={60} onChange={(e) => setAutoProduct(e.target.value)} placeholder="dress" />
+        </label>
+        <label>
+          What should stay on top of it? <span className="muted small">(comma separated)</span>
+          <input value={autoKeep} maxLength={300} onChange={(e) => setAutoKeep(e.target.value)} />
+        </label>
+        <label className="check">
+          <input type="checkbox" checked={autoTop} onChange={(e) => setAutoTop(e.target.checked)} /> It has a top part on the chest (bodice)
+        </label>
+        <button className="btn btn-primary" onClick={autoSetup} disabled={autoBusy || !autoProduct.trim()}>
+          {autoBusy ? "Local AI is looking… (1-2 min on a laptop)" : "Find them for me"}
+        </button>
+        {autoNotes.length > 0 && <ul className="small">{autoNotes.map((n) => <li key={n}>{n}</li>)}</ul>}
+        <p className="muted small">Then check the result and fix anything with the tools below.</p>
+      </details>
 
       <ol className="steps small muted">
         <li><strong>Shape:</strong> drag the oval over where the product lies. Turn on the top-piece box for dresses with a bodice.</li>

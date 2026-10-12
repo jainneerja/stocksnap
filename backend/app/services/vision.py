@@ -188,6 +188,48 @@ def parse_facts(raw: str) -> Facts:
     )
 
 
+def parse_boxes(raw: str, labels: list[str], w: int, h: int) -> dict[str, list[list[float]]]:
+    """Model output -> {label: [boxes as fractions]}. Copes with the usual small-model
+    quirks: a bare list, 0-1 or 0-1000 coordinates, labels in other words."""
+    data: object = None
+    m = re.search(r"[\[{].*[\]}]", raw or "", re.S)
+    if m:
+        try:
+            data = json.loads(m.group(0))
+        except json.JSONDecodeError:
+            data = None
+    items = data.get("items", []) if isinstance(data, dict) else data if isinstance(data, list) else []
+    out: dict[str, list[list[float]]] = {}
+    for it in items if isinstance(items, list) else []:
+        if not isinstance(it, dict):
+            continue
+        box = it.get("box") or it.get("bbox") or it.get("bbox_2d")
+        if not (isinstance(box, list) and len(box) == 4):
+            continue
+        try:
+            x0, y0, x1, y1 = (float(v) for v in box)
+        except (TypeError, ValueError):
+            continue
+        top = max(x0, y0, x1, y1)
+        if top <= 1.0:
+            sx, sy = 1.0, 1.0  # already fractions
+        elif top > max(w, h) * 1.05:
+            sx = sy = 1000.0  # 0-1000 grid
+        else:
+            sx, sy = float(w), float(h)
+        fx0, fx1 = sorted((x0 / sx, x1 / sx))
+        fy0, fy1 = sorted((y0 / sy, y1 / sy))
+        fx0, fy0, fx1, fy1 = (min(max(v, 0.0), 1.0) for v in (fx0, fy0, fx1, fy1))
+        if fx1 - fx0 < 0.01 or fy1 - fy0 < 0.01:
+            continue
+        said = str(it.get("label", "")).strip().lower()
+        label = next((l for l in labels if l.lower() == said), None) or next(
+            (l for l in labels if l.lower() in said or said in l.lower()), None)
+        if label:
+            out.setdefault(label, []).append([fx0, fy0, fx1, fy1])
+    return out
+
+
 def seller_context(*parts: str) -> str:
     """Join shop-level and item-level notes from the seller, skipping blanks."""
     return " ".join(p.strip().rstrip(".") + "." for p in parts if p and p.strip())
@@ -260,6 +302,35 @@ class OllamaVision:
             log.warning("vision model call failed: %s", exc)
             raise VisionUnavailable(str(exc)) from exc
         return parse_draft(r.json().get("response", ""))
+
+    def locate(self, image: Image.Image, labels: list[str]) -> dict[str, list[list[float]]]:
+        """Find named things in a picture (Qwen2.5-VL can point at objects).
+        Returns {label: [[x0, y0, x1, y1], ...]} as fractions of the image."""
+        img = image.convert("RGB").copy()
+        img.thumbnail((896, 896))
+        # Qwen2.5-VL works on a grid of 28 px; give it exactly that so its pixel
+        # coordinates line up with ours
+        w, h = max(28, img.width // 28 * 28), max(28, img.height // 28 * 28)
+        img = img.resize((w, h))
+        buf = io.BytesIO()
+        img.save(buf, "JPEG", quality=90)
+        prompt = (
+            f"The image is {w} pixels wide and {h} pixels tall. Find each of these in it: "
+            + "; ".join(f'"{l}"' for l in labels)
+            + ". Reply with JSON only: {\"items\": [{\"label\": \"<one of the names above>\", "
+            "\"box\": [x1, y1, x2, y2]}]} with pixel coordinates. Give one item per object "
+            "(two hands = two items). Leave out anything you cannot see."
+        )
+        payload = {"model": self.model, "prompt": prompt, "images": [base64.b64encode(buf.getvalue()).decode()],
+                   "format": "json", "stream": False, "keep_alive": "30m",
+                   "options": {"temperature": 0, "num_predict": 400}}
+        try:
+            r = httpx.post(f"{self.base_url}/api/generate", json=payload, timeout=self.timeout_s)
+            r.raise_for_status()
+        except Exception as exc:  # noqa: BLE001
+            log.warning("vision model call failed: %s", exc)
+            raise VisionUnavailable(str(exc)) from exc
+        return parse_boxes(r.json().get("response", ""), labels, w, h)
 
     def facts(self, images: list[Image.Image], hint: str = "", seller: str = "") -> Facts:
         """Fast mode: a few short facts only (see FACTS_PROMPT)."""

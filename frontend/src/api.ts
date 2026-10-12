@@ -501,6 +501,12 @@ export const scenes = {
     return req<Scene>("/api/scenes", { method: "POST", body: fd });
   },
   update: (id: string, data: SceneUpdate) => req<Scene>(`/api/scenes/${id}`, json("PUT", data)),
+  /** Local AI finds the product, its top part, the face and what to keep, and sets the scene up. */
+  auto: (id: string, data: { product: string; keep: string; top_piece: boolean }) =>
+    req<{ scene: Scene; notes: string[]; seconds: number; found: Record<string, number> }>(
+      `/api/scenes/${id}/auto`,
+      json("POST", data),
+    ),
   remove: (id: string) => req<void>(`/api/scenes/${id}`, { method: "DELETE" }),
   fileUrl: (id: string, name: "scene.jpg" | "layers.jpg" | "thumb.jpg", v = 0) => `/api/scenes/${id}/files/${name}?v=${v}`,
   /** Render a product photo (or a saved item) into the scene; returns an object URL. */

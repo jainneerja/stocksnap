@@ -109,3 +109,38 @@ def test_scenes_are_per_shop(make_client):
     _make_scene(c)
     c.post("/api/shops", json={"name": "Other shop"})
     assert c.get("/api/scenes").json() == []
+
+
+def test_auto_setup_from_text(make_client):
+    c = _client(make_client)
+    r = c.post("/api/scenes", files={"file": ("s.jpg", _jpeg(scene_image()), "image/jpeg")}, data={"name": "Auto"})
+    sid = r.json()["id"]
+    W, H = 600, 700
+    f = lambda x0, y0, x1, y1: [x0 / W, y0 / H, x1 / W, y1 / H]
+    c.vision.boxes = {
+        "dress": [f(60, 300, 540, 620)],
+        "top part of the dress on the chest": [f(262, 225, 338, 332)],
+        "face": [f(250, 140, 350, 240)],
+        "arm": [f(226, 296, 254, 424)],
+    }
+    out = c.post(f"/api/scenes/{sid}/auto", json={"product": "Dress", "keep": "arm, ball"}).json()
+    t = out["scene"]
+    assert "Not found: ball" in " ".join(out["notes"])
+    assert abs(t["cx"] - 0.5) < 0.01 and abs(t["top"] - 300 / H) < 0.01 and abs(t["rx"] - 0.4) < 0.01
+    assert t["top_box"][1] >= 240 / H - 1e-6          # neckline never above the chin
+    assert len(t["keep_outlines"]) == 1 and len(t["keep_outlines"][0]) >= 3
+    assert c.vision.located[-1][:3] == ["dress", "top part of the dress on the chest", "face"]
+    # and the result: arm kept, old pink gone, figure untouched
+    img = c.post(f"/api/scenes/{sid}/try", files={"file": ("p.jpg", product_photo(), "image/jpeg")})
+    o = np.asarray(Image.open(io.BytesIO(img.content)).convert("RGB")).astype(int)
+    pink = (o[:, :, 0] > 190) & (o[:, :, 1] < 90) & (o[:, :, 2] > 100)
+    assert pink.mean() < 0.01
+    assert abs(o[330:400, 235:246, 0].mean() - 200) < 35
+    assert abs(o[160:220, 270:330, 0].mean() - 200) < 20
+
+
+def test_auto_setup_needs_the_ai(make_client):
+    c = make_client(vision_fails=True)
+    c.app.state.lab.cutter.engine = "basic"
+    sid = c.post("/api/scenes", files={"file": ("s.jpg", _jpeg(scene_image()), "image/jpeg")}).json()["id"]
+    assert c.post(f"/api/scenes/{sid}/auto", json={}).status_code == 503
