@@ -160,6 +160,9 @@ def auto_setup(scene_id: str, body: AutoSetup, request: Request):
         t.top_box = None
         keep = [*keep, "face"]
     notes = apply_found(t, scene, found, product, top_label, keep)
+    if not found:
+        raw = (getattr(vision, "last_locate_raw", "") or "").strip().replace("\n", " ")
+        notes.append("The AI's reply couldn't be read" + (f": \"{raw[:300]}\"" if raw else " (it was empty)."))
     t.keep, t.remove = [], []
     store.save(t)
     return {"scene": t.to_dict(), "notes": notes, "seconds": round(time.time() - start, 1),

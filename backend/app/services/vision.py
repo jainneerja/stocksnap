@@ -314,23 +314,28 @@ class OllamaVision:
         img = img.resize((w, h))
         buf = io.BytesIO()
         img.save(buf, "JPEG", quality=90)
+        # Qwen2.5-VL's own grounding style (what it was trained on): a JSON list
+        # of {"bbox_2d": [x1, y1, x2, y2], "label": ...} in pixels of this image.
+        # No forced JSON format - that pushes small models off their trained output.
         prompt = (
-            f"The image is {w} pixels wide and {h} pixels tall. Find each of these in it: "
-            + "; ".join(f'"{l}"' for l in labels)
-            + ". Reply with JSON only: {\"items\": [{\"label\": \"<one of the names above>\", "
-            "\"box\": [x1, y1, x2, y2]}]} with pixel coordinates. Give one item per object "
-            "(two hands = two items). Leave out anything you cannot see."
+            "Locate the following objects in the image: " + ", ".join(labels) + ". "
+            "Output the bbox coordinates of each one in JSON format, as a list of "
+            '{"bbox_2d": [x1, y1, x2, y2], "label": "<object name>"}. '
+            "Use one entry per object (two hands = two entries)."
         )
         payload = {"model": self.model, "prompt": prompt, "images": [base64.b64encode(buf.getvalue()).decode()],
-                   "format": "json", "stream": False, "keep_alive": "30m",
-                   "options": {"temperature": 0, "num_predict": 400}}
+                   "stream": False, "keep_alive": "30m",
+                   "options": {"temperature": 0, "num_predict": 500}}
         try:
             r = httpx.post(f"{self.base_url}/api/generate", json=payload, timeout=self.timeout_s)
             r.raise_for_status()
         except Exception as exc:  # noqa: BLE001
             log.warning("vision model call failed: %s", exc)
             raise VisionUnavailable(str(exc)) from exc
-        return parse_boxes(r.json().get("response", ""), labels, w, h)
+        raw = r.json().get("response", "")
+        self.last_locate_raw = raw  # shown to the seller if nothing could be read
+        log.info("locate %s -> %s", labels, raw[:500])
+        return parse_boxes(raw, labels, w, h)
 
     def facts(self, images: list[Image.Image], hint: str = "", seller: str = "") -> Facts:
         """Fast mode: a few short facts only (see FACTS_PROMPT)."""
