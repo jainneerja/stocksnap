@@ -73,6 +73,8 @@ class SceneTemplate:
     shadow: float = 0.38
     scale: float = 1.0  # new product size relative to the oval (the oval also marks what gets cleared)
     sensitivity: float = 0.025  # colour share (in the oval's outer ring) that counts as old product
+    empty_base: bool = False  # base photo has no old product (e.g. idol without a dress): nothing to
+                              # remove, the new product goes over everything except the marked parts
 
     @classmethod
     def from_dict(cls, d: dict) -> "SceneTemplate":
@@ -185,6 +187,8 @@ def analyse(scene: np.ndarray, t: SceneTemplate) -> tuple[np.ndarray, np.ndarray
     region = area_mask(t)
     sel = region > 0
     lab = cv2.cvtColor(scene, cv2.COLOR_BGR2LAB).astype(np.float32)
+    if t.empty_base:
+        return _analyse_empty(scene, t, region, lab)
 
     # outer ring of the oval: only product there
     yy, xx = np.mgrid[0:h, 0:w]
@@ -283,6 +287,23 @@ def analyse(scene: np.ndarray, t: SceneTemplate) -> tuple[np.ndarray, np.ndarray
     keep = cv2.bitwise_and(cv2.bitwise_or(keep, k_strokes), cv2.bitwise_not(r_strokes))
     old = cv2.bitwise_and(cv2.bitwise_or(old, r_strokes), cv2.bitwise_not(keep))
     return old, keep
+
+
+def _analyse_empty(scene: np.ndarray, t: SceneTemplate, region: np.ndarray, lab: np.ndarray):
+    """Base photo without an old product: nothing is removed. Only the seller's
+    marks (and the head above the top piece) stay on top of the new product."""
+    h, w = scene.shape[:2]
+    old = np.zeros((h, w), np.uint8)
+    keep = np.zeros((h, w), np.uint8)
+    if t.top_box:
+        bx0, by0, bx1, _ = t.top_box
+        keep[: int(by0 * h), max(int((bx0 - 0.03) * w), 0): int((bx1 + 0.03) * w)] = 255
+    for s in t.keep:
+        keep |= _strokes(t, [s])
+    for p in t.keep_outlines:
+        keep |= _outlines(t, [p])
+    r = _strokes(t, t.remove) | _outlines(t, t.remove_outlines)
+    return old, cv2.bitwise_and(keep, cv2.bitwise_not(r))
 
 
 def empty_plate(scene: np.ndarray, hole: np.ndarray) -> np.ndarray:

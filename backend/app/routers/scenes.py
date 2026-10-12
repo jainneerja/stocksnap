@@ -85,6 +85,7 @@ class SceneUpdate(BaseModel):
     shading: Optional[float] = Field(default=None, ge=0, le=1)
     shadow: Optional[float] = Field(default=None, ge=0, le=1)
     scale: Optional[float] = Field(default=None, ge=0.5, le=1.2)
+    empty_base: Optional[bool] = None
 
 
 @router.get("/api/scenes")

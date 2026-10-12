@@ -179,3 +179,21 @@ def test_qwen_size_is_left_alone_by_ollama():
     for wh in [(1122, 1402), (700, 896), (4000, 3000), (300, 300)]:
         w, h = qwen_size(*wh)
         assert w % 28 == 0 and h % 28 == 0 and 28 * 28 * 1024 <= w * h <= 28 * 28 * 1280
+
+
+def test_empty_base_removes_nothing_and_keeps_only_marks():
+    """A base photo with no old product (idol without a dress): nothing is
+    cleared, the new product covers everything except the marked parts."""
+    import cv2
+    from app.services.scenes import SceneTemplate, analyse
+
+    scene = cv2.cvtColor(np.asarray(scene_image()), cv2.COLOR_RGB2BGR)
+    t = SceneTemplate(id="x", name="x", width=600, height=700, cx=0.5, top=0.43, bottom=0.89, rx=0.4,
+                      top_box=[0.43, 0.35, 0.57, 0.48], empty_base=True)
+    arm = [[0.38, 0.43], [0.42, 0.43], [0.42, 0.6], [0.38, 0.6]]
+    t.keep_outlines = [arm]
+    old, keep = analyse(scene, t)
+    assert old.max() == 0                                   # nothing removed
+    assert keep[int(0.5 * 700), int(0.4 * 600)] == 255      # the marked arm stays on top
+    assert keep[int(0.7 * 700), int(0.25 * 600)] == 0       # the rest is covered by the new product
+    assert keep[int(0.2 * 700), int(0.5 * 600)] == 255      # head above the top piece stays

@@ -486,6 +486,7 @@ export interface Scene {
   shading: number;
   shadow: number;
   scale: number;
+  empty_base?: boolean; // base photo without an old product: nothing is removed
 }
 
 export type SceneUpdate = Partial<Omit<Scene, "id" | "width" | "height" | "created" | "top_box">> & {

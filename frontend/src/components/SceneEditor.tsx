@@ -15,6 +15,7 @@ interface Geo {
   rx: number;
   tilt: number;
   scale: number;
+  empty_base: boolean;
   top_box: [number, number, number, number] | null;
 }
 
@@ -41,7 +42,7 @@ export function SceneEditor({
   toast: (m: string) => void;
 }) {
   const [geo, setGeo] = useState<Geo>({
-    cx: scene.cx, top: scene.top, bottom: scene.bottom, rx: scene.rx, tilt: scene.tilt, scale: scene.scale ?? 1, top_box: scene.top_box,
+    cx: scene.cx, top: scene.top, bottom: scene.bottom, rx: scene.rx, tilt: scene.tilt, scale: scene.scale ?? 1, empty_base: !!scene.empty_base, top_box: scene.top_box,
   });
   const [keep, setKeep] = useState<Stroke[]>(scene.keep);
   const [erase, setErase] = useState<Stroke[]>(scene.remove);
@@ -214,7 +215,7 @@ export function SceneEditor({
     try {
       const r = await scenes.auto(scene.id, { product: autoProduct, keep: autoKeep, top_piece: autoTop });
       const s = r.scene;
-      setGeo({ cx: s.cx, top: s.top, bottom: s.bottom, rx: s.rx, tilt: s.tilt, scale: s.scale ?? 1, top_box: s.top_box });
+      setGeo({ cx: s.cx, top: s.top, bottom: s.bottom, rx: s.rx, tilt: s.tilt, scale: s.scale ?? 1, empty_base: !!s.empty_base, top_box: s.top_box });
       setOutlines(s.keep_outlines ?? []);
       setKeep(s.keep);
       setErase(s.remove);
@@ -410,6 +411,12 @@ export function SceneEditor({
       )}
       </div>
 
+      <label className="check small">
+        <input type="checkbox" checked={geo.empty_base}
+          onChange={(e) => { setGeo({ ...geo, empty_base: e.target.checked }); setDirty(true); }} />
+        Nothing to remove - this photo has no old product on it (e.g. the idol or model without clothes).
+        The new product goes over everything except what you mark to keep (hands, jewellery).
+      </label>
       <label className="inline small">
         View angle: from the front
         <input type="range" min={0.18} max={0.5} step={0.01} value={geo.tilt}
