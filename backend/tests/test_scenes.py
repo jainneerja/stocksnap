@@ -144,3 +144,26 @@ def test_auto_setup_needs_the_ai(make_client):
     c.app.state.lab.cutter.engine = "basic"
     sid = c.post("/api/scenes", files={"file": ("s.jpg", _jpeg(scene_image()), "image/jpeg")}).json()["id"]
     assert c.post(f"/api/scenes/{sid}/auto", json={}).status_code == 503
+
+
+def test_auto_setup_ignores_repeated_boxes():
+    """Small models repeat boxes (the chest box labelled 'hand'): those are ignored."""
+    import cv2
+    from app.services.scenes import SceneTemplate, apply_found
+
+    scene = cv2.cvtColor(np.asarray(scene_image()), cv2.COLOR_RGB2BGR)
+    t = SceneTemplate(id="x", name="x", width=600, height=700)
+    chest = [0.43, 0.33, 0.57, 0.48]
+    found = {"dress": [[0.1, 0.43, 0.9, 0.89]], "top part": [chest], "face": [[0.41, 0.2, 0.59, 0.34]],
+             "hand": [chest, [0.38, 0.43, 0.42, 0.6]], "necklace": [[0.41, 0.2, 0.59, 0.34]]}
+    notes = apply_found(t, scene, found, "dress", "top part", ["hand", "necklace"])
+    assert len(t.keep_outlines) == 1                      # only the real hand
+    assert "necklace" in " ".join(notes)                  # the face copy didn't count
+
+
+def test_qwen_size_is_left_alone_by_ollama():
+    from app.services.vision import qwen_size
+
+    for wh in [(1122, 1402), (700, 896), (4000, 3000), (300, 300)]:
+        w, h = qwen_size(*wh)
+        assert w % 28 == 0 and h % 28 == 0 and 28 * 28 * 1024 <= w * h <= 28 * 28 * 1280

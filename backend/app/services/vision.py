@@ -188,6 +188,19 @@ def parse_facts(raw: str) -> Facts:
     )
 
 
+def qwen_size(width: int, height: int, lo: int = 28 * 28 * 1024, hi: int = 28 * 28 * 1280) -> tuple[int, int]:
+    """A size on Qwen2.5-VL's 28 px grid with an area between `lo` and `hi`
+    pixels, close to the original shape - so the model doesn't resize it."""
+    target = (lo + hi) / 2
+    k = (target / (width * height)) ** 0.5
+    w, h = max(28, round(width * k / 28) * 28), max(28, round(height * k / 28) * 28)
+    while w * h > hi:
+        w, h = (w - 28, h) if w >= h else (w, h - 28)
+    while w * h < lo:
+        w, h = (w + 28, h) if w <= h else (w, h + 28)
+    return w, h
+
+
 def parse_boxes(raw: str, labels: list[str], w: int, h: int) -> dict[str, list[list[float]]]:
     """Model output -> {label: [boxes as fractions]}. Copes with the usual small-model
     quirks: a bare list, 0-1 or 0-1000 coordinates, labels in other words."""
@@ -306,11 +319,11 @@ class OllamaVision:
     def locate(self, image: Image.Image, labels: list[str]) -> dict[str, list[list[float]]]:
         """Find named things in a picture (Qwen2.5-VL can point at objects).
         Returns {label: [[x0, y0, x1, y1], ...]} as fractions of the image."""
-        img = image.convert("RGB").copy()
-        img.thumbnail((896, 896))
-        # Qwen2.5-VL works on a grid of 28 px; give it exactly that so its pixel
-        # coordinates line up with ours
-        w, h = max(28, img.width // 28 * 28), max(28, img.height // 28 * 28)
+        img = image.convert("RGB")
+        # Qwen2.5-VL answers in pixels of the image *as it sees it*. Ollama resizes
+        # anything outside roughly 0.8-1.0 megapixels (on a 28 px grid), which
+        # would silently scale every box. So send a size it keeps as is.
+        w, h = qwen_size(img.width, img.height)
         img = img.resize((w, h))
         buf = io.BytesIO()
         img.save(buf, "JPEG", quality=90)

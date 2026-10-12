@@ -426,11 +426,11 @@ def trace_in_box(scene: np.ndarray, box: list[float], max_points: int = 40) -> O
     fg = np.where((mask == cv2.GC_FGD) | (mask == cv2.GC_PR_FGD), 255, 0).astype(np.uint8)
     fg = cv2.morphologyEx(fg, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
     cnts, _ = cv2.findContours(fg, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    if not cnts:
-        return None
-    c = max(cnts, key=cv2.contourArea)
-    if cv2.contourArea(c) < 0.15 * (X1 - X0) * (Y1 - Y0):
-        # GrabCut found next to nothing: fall back to the box itself
+    c = max(cnts, key=cv2.contourArea) if cnts else None
+    if c is None or cv2.contourArea(c) < 0.15 * (X1 - X0) * (Y1 - Y0):
+        # GrabCut found next to nothing (e.g. gold arm on a busy dress): keep the
+        # box itself - the scene's colour clean-up then trims old-product fabric
+        # off its edges
         c = np.array([[[X0 - cx0, Y0 - cy0]], [[X1 - cx0, Y0 - cy0]], [[X1 - cx0, Y1 - cy0]], [[X0 - cx0, Y1 - cy0]]])
     eps = 0.003 * cv2.arcLength(c, True)
     approx = cv2.approxPolyDP(c, eps, True)
@@ -463,9 +463,21 @@ def apply_found(t: SceneTemplate, scene: np.ndarray, found: dict[str, list[list[
                 t.top_box = [x0, y0, x1, y1]
         else:
             notes.append(f"Couldn't find the {top_piece} - turn on the top-piece box yourself if needed.")
+    # Small models often repeat a box for several names (the chest box labelled
+    # "hand", the face box labelled "necklace"). A keep box that is really the
+    # product, top piece or face is ignored.
+    taken = [b for k in (product, top_piece or "", "face") for b in (found.get(k) or [])]
+
+    def _iou(a, b):
+        ix = max(0.0, min(a[2], b[2]) - max(a[0], b[0]))
+        iy = max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
+        inter = ix * iy
+        union = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter
+        return inter / union if union > 0 else 0.0
+
     outlines, missing = [], []
     for label in keep:
-        got = found.get(label) or []
+        got = [b for b in (found.get(label) or []) if label == "face" or all(_iou(b, o) < 0.6 for o in taken)]
         if not got:
             missing.append(label)
         for b in got:
