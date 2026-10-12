@@ -261,6 +261,16 @@ def analyse(scene: np.ndarray, t: SceneTemplate) -> tuple[np.ndarray, np.ndarray
     old = cv2.bitwise_or(cv2.bitwise_and(region, cv2.bitwise_not(keep)), spill)
     old = cv2.morphologyEx(old, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
 
+    # head guard: whatever stands directly above the top piece (an idol's face
+    # and neck, a model's head) is never old product, even if the oval overlaps it
+    if t.top_box:
+        bx0, by0, bx1, _ = t.top_box
+        guard = np.zeros((h, w), np.uint8)
+        guard[: int(by0 * h), max(int((bx0 - 0.03) * w), 0): int((bx1 + 0.03) * w)] = 255
+        guard = cv2.bitwise_and(guard, cv2.dilate(region, np.ones((15, 15), np.uint8)))
+        old = cv2.bitwise_and(old, cv2.bitwise_not(guard))
+        keep = cv2.bitwise_or(keep, guard)  # stays on top: the new dress's back edge goes behind it
+
     # the seller's corrections win (brush strokes and outlines). Inside each kept
     # shape, pixels in one of the old product's main colours that is clearly
     # different from the shape's own colour (pink fabric round a gold arm) are

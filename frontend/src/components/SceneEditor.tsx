@@ -175,9 +175,19 @@ export function SceneEditor({
   }
 
   async function save(): Promise<Scene | null> {
+    // an outline still being drawn: close it (3+ points) rather than silently dropping it
+    let allOutlines = outlines;
+    if (drawingOutline.length >= 3) {
+      allOutlines = [...outlines, drawingOutline];
+      setOutlines(allOutlines);
+      setHistory((h) => [...h, "outline"]);
+      setDrawingOutline([]);
+    } else if (drawingOutline.length > 0) {
+      toast("An outline needs points all round the part - click round its edge, then click the first dot to close.");
+    }
     setSaving(true);
     try {
-      const s = await scenes.update(scene.id, { ...geo, top_box: geo.top_box ?? [], keep, remove: erase, keep_outlines: outlines, name });
+      const s = await scenes.update(scene.id, { ...geo, top_box: geo.top_box ?? [], keep, remove: erase, keep_outlines: allOutlines, name });
       setVersion((v) => v + 1);
       setDirty(false);
       onSaved(s);
@@ -272,7 +282,7 @@ export function SceneEditor({
                 setGeo((g) => ({
                   ...g,
                   top_box: e.target.checked
-                    ? [g.cx - g.rx * 0.3, Math.max(0, g.top + 0.01), g.cx + g.rx * 0.3, (g.top + g.bottom) / 2 - 0.05]
+                    ? [g.cx - g.rx * 0.3, g.top + (g.bottom - g.top) * 0.12, g.cx + g.rx * 0.3, g.top + (g.bottom - g.top) * 0.42]
                     : null,
                 }));
               }}
@@ -289,6 +299,18 @@ export function SceneEditor({
         </div>
       </div>
 
+      {tool === "outline" && (
+        <p className="tool-hint small">
+          {drawingOutline.length === 0
+            ? "Click points all round the edge of an arm, hand or jewellery - like tracing it."
+            : drawingOutline.length < 3
+              ? "Keep going round the edge…"
+              : "Keep going round, then click the first (big) dot or Finish outline to close it."}
+        </p>
+      )}
+      {tool === "shape" && geo.top_box && (
+        <p className="tool-hint small">Keep the top of the red box below the chin - that's where the neckline goes.</p>
+      )}
       <div className="scene-work">
       <div className={`scene-canvas tool-${tool}`}>
         <img src={scenes.fileUrl(scene.id, view === "layers" ? "layers.jpg" : "scene.jpg", version)} alt="" draggable={false} />

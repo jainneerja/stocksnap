@@ -396,3 +396,4 @@ label.inline select { width: auto; }
 .scene-canvas .outline.done { fill: rgba(46, 204, 64, 0.35); stroke: #2ecc40; stroke-width: 2; vector-effect: non-scaling-stroke; pointer-events: none; }
 .scene-canvas .outline.drawing polyline { fill: none; stroke: #2ecc40; stroke-width: 2; vector-effect: non-scaling-stroke; }
 .scene-canvas .outline.drawing circle { fill: #2ecc40; stroke: #fff; stroke-width: 1.5; vector-effect: non-scaling-stroke; pointer-events: none; }
+.tool-hint { margin: 0 0 8px; padding: 6px 10px; border-radius: 8px; background: var(--brand-soft); }
