@@ -440,6 +440,33 @@ def trace_in_box(scene: np.ndarray, box: list[float], max_points: int = 40) -> O
     return [[(p[0][0] + cx0) / w, (p[0][1] + cy0) / h] for p in approx]
 
 
+NECKWEAR = ("necklace", "chain", "mala", "pendant", "locket", "haar", "beads", "choker", "garland")
+
+
+def is_neckwear(label: str) -> bool:
+    low = label.lower()
+    return any(w in low for w in NECKWEAR)
+
+
+def neck_zone(face: list[float], top_box: Optional[list[float]]) -> list[float]:
+    """Where a necklace hangs: from just above the chin down onto the chest,
+    a bit wider than the face. Fractions of the scene."""
+    x0, y0, x1, y1 = face
+    fw, fh = x1 - x0, y1 - y0
+    zx0, zx1 = x0 - 0.3 * fw, x1 + 0.3 * fw
+    zy0 = y1 - 0.08 * fh
+    if top_box:
+        bottom = top_box[1] + 0.45 * (top_box[3] - top_box[1])
+    else:
+        bottom = y1 + 0.6 * fh
+    bottom = max(bottom, y1 + 0.25 * fh)
+    return [max(zx0, 0.0), max(zy0, 0.0), min(zx1, 1.0), min(bottom, 1.0)]
+
+
+def _box_poly(b: list[float]) -> list[list[float]]:
+    return [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]]
+
+
 def apply_found(t: SceneTemplate, scene: np.ndarray, found: dict[str, list[list[float]]],
                 product: str, top_piece: Optional[str], keep: list[str]) -> list[str]:
     """Turn boxes found by the vision model into the scene's marks. Returns notes."""
@@ -476,8 +503,16 @@ def apply_found(t: SceneTemplate, scene: np.ndarray, found: dict[str, list[list[
         return inter / union if union > 0 else 0.0
 
     outlines, missing = [], []
+    faces = found.get("face") or []
     for label in keep:
         got = [b for b in (found.get(label) or []) if label == "face" or all(_iou(b, o) < 0.6 for o in taken)]
+        if not got and faces and is_neckwear(label):
+            # Small models rarely box a necklace on its own. It hangs just under
+            # the face, so keep that zone; the colour clean-up then trims the old
+            # product's fabric and leaves the beads/chain.
+            outlines.append(_box_poly(neck_zone(max(faces, key=lambda b: b[3]), t.top_box)))
+            notes.append(f"{label.capitalize()}: placed under the face - check the outline.")
+            continue
         if not got:
             missing.append(label)
         for b in got:

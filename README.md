@@ -130,7 +130,7 @@ ollama pull qwen2.5vl:3b          # or: ollama pull moondream  (smaller, faster)
 # 2. Backend
 cd backend
 python -m venv .venv
-.venv\Scripts\activate            # Windows   |   source .venv/bin/activate  (Mac/Linux)
+source .venv/Scripts/activate     # Windows Git Bash  (PowerShell: .venv\Scripts\activate;  Mac/Linux: source .venv/bin/activate)
 pip install -r requirements.txt
 
 # 3. Frontend (build once)

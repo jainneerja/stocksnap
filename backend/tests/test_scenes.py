@@ -157,8 +157,20 @@ def test_auto_setup_ignores_repeated_boxes():
     found = {"dress": [[0.1, 0.43, 0.9, 0.89]], "top part": [chest], "face": [[0.41, 0.2, 0.59, 0.34]],
              "hand": [chest, [0.38, 0.43, 0.42, 0.6]], "necklace": [[0.41, 0.2, 0.59, 0.34]]}
     notes = apply_found(t, scene, found, "dress", "top part", ["hand", "necklace"])
-    assert len(t.keep_outlines) == 1                      # only the real hand
-    assert "necklace" in " ".join(notes)                  # the face copy didn't count
+    # the real hand, plus the necklace zone under the face (the face copy didn't count)
+    assert len(t.keep_outlines) == 2
+    assert "Necklace: placed under the face" in " ".join(notes)
+    neck = np.array(t.keep_outlines[1])
+    assert neck[:, 1].min() < 0.34 < neck[:, 1].max()     # starts at the chin, hangs onto the chest
+    assert neck[:, 1].max() < 0.48                         # not down the whole bodice
+
+
+def test_neck_zone_only_for_neckwear():
+    from app.services.scenes import is_neckwear, neck_zone
+
+    assert is_neckwear("necklace") and is_neckwear("pearl mala") and not is_neckwear("flute")
+    z = neck_zone([0.4, 0.2, 0.6, 0.34], None)
+    assert z[0] < 0.4 and z[2] > 0.6 and z[1] < 0.34 < z[3]
 
 
 def test_qwen_size_is_left_alone_by_ollama():
