@@ -334,10 +334,13 @@ def render(t: SceneTemplate, scene: np.ndarray, plate: np.ndarray, keep: np.ndar
     if t.top_box:
         outline = [[x0 + u * bw, y0 + v * bh] for u, v in t.top_outline]
         top_mask_src = cv2.bitwise_and(_poly(product.shape, outline), alpha)
-        # On the floor, show the skirt that lies under the top piece (the same
-        # product's embroidery from the opposite side) so it doesn't appear twice.
+        # On the floor, the top piece covered part of the skirt in the photo. Fill
+        # that patch with the same dress's embroidery from the side (rotated 90
+        # degrees: same distance from the centre, so the same ring of pattern),
+        # so the top piece doesn't appear twice. The opposite side (180) can be a
+        # plain seam that looks like the top piece carrying on below the waist.
         hide = cv2.dilate(_poly(product.shape, outline), np.ones((25, 25), np.uint8))
-        R = cv2.getRotationMatrix2D(((x0 + x1) / 2, (y0 + y1) / 2), 180, 1.0)
+        R = cv2.getRotationMatrix2D(((x0 + x1) / 2, (y0 + y1) / 2), 90, 1.0)
         flipped = cv2.warpAffine(product, R, (product.shape[1], product.shape[0]))
         flat = _over(product.astype(np.float32), flipped, _soft(hide, 6)).astype(np.uint8)
 
