@@ -1,18 +1,25 @@
 #!/usr/bin/env bash
-# One-image test: put a Laddu Gopal dress on an idol with a local AI image-editing model.
-# Runs on CPU (no NVIDIA card). Needs about 20 GB of free disk and ideally 24 GB+ RAM.
+# Local AI test: dress an idol photo in a real dress, on CPU (no NVIDIA card).
 #
 #   cd /c/Projects/ai-edit-test
-#   bash run.sh dress.jpg            # your dress photo
+#   bash run.sh dress.jpg idol_bare.jpg     # dress photo + photo of the idol WITHOUT clothes (recommended)
+#   bash run.sh dress.jpg                   # old test: the AI invents the idol and the scene
+#
+# With an idol photo the result keeps that photo's idol, jewellery, pose and background,
+# and only adds the dress. Prompt: prompt_idol.txt (with idol) / prompt.txt (without).
 #
 # Options (put before "bash"):
-#   QUANT=Q3_K_M   smaller/faster model if your PC has 16 GB RAM (default Q4_K_M)
-#   BACKEND=vulkan try the Intel/AMD graphics chip instead of the CPU
-#   SIZE=512       smaller output, much faster (default 768)
+#   SIZE=512        output height in px (default 640; bigger = much slower)
+#   QUANT=Q3_K_M    smaller/faster model if your PC has 16 GB RAM (default Q4_K_M)
+#   SEED=7          a different try (default 42)
+#   BACKEND=vulkan  try the Intel/AMD graphics chip instead of the CPU
 set -euo pipefail
-PHOTO="${1:?Usage: bash run.sh <dress-photo.jpg>}"
-[ -f "$PHOTO" ] || { echo "Can't find '$PHOTO'. Photos here: $(ls *.jp*g *.png 2>/dev/null | tr '\n' ' ')"; exit 1; }
-QUANT="${QUANT:-Q4_K_M}"; BACKEND="${BACKEND:-cpu}"; SIZE="${SIZE:-768}"
+DRESS="${1:?Usage: bash run.sh <dress-photo> [idol-photo]}"
+IDOL="${2:-}"
+for f in "$DRESS" ${IDOL:+"$IDOL"}; do
+  [ -f "$f" ] || { echo "Can't find '$f'. Photos here: $(ls *.jp*g *.png 2>/dev/null | tr '\n' ' ')"; exit 1; }
+done
+QUANT="${QUANT:-Q4_K_M}"; BACKEND="${BACKEND:-cpu}"; SIZE="${SIZE:-640}"; SEED="${SEED:-42}"
 HERE="$(cd "$(dirname "$0")" && pwd)"; M="$HERE/models"; mkdir -p "$M" "$HERE/bin" "$HERE/out"
 PY="$(command -v python || command -v python3)"
 
@@ -41,21 +48,29 @@ LLM=$(hf_pick mradermacher/Qwen2.5-VL-7B-Instruct-GGUF "Q4_K_M\\.gguf$")
 PROJ=$(hf_pick mradermacher/Qwen2.5-VL-7B-Instruct-GGUF "mmproj.*(Q8_0|f16)\\.gguf$")
 LORA=$(hf_pick lightx2v/Qwen-Image-Edit-2511-Lightning "4step.*\\.safetensors$" || true)
 for v in EDIT LLM PROJ; do [ -n "${!v}" ] || { echo "Couldn't find the $v model file on Hugging Face - paste this message to Claude"; exit 1; }; done
-echo "  using $EDIT, $LLM, $PROJ${LORA:+, $LORA}"
 get unsloth/Qwen-Image-Edit-2511-GGUF "$EDIT" "$M/edit.gguf"
 get mradermacher/Qwen2.5-VL-7B-Instruct-GGUF "$LLM" "$M/llm.gguf"
 get mradermacher/Qwen2.5-VL-7B-Instruct-GGUF "$PROJ" "$M/mmproj.gguf"
 get Comfy-Org/Qwen-Image_ComfyUI split_files/vae/qwen_image_vae.safetensors "$M/vae.safetensors"
-PROMPT="$(cat "$HERE/prompt.txt")"; STEPS=20; CFG=2.5; EXTRA=()
+
+if [ -n "$IDOL" ]; then
+  # image 1 = the idol photo (what gets edited), image 2 = the dress
+  PROMPT="$(cat "$HERE/prompt_idol.txt")"; REFS=(-r "$IDOL" -r "$DRESS")
+  # output keeps the idol photo's shape (sides rounded to 16 px)
+  read -r W H < <("$PY" -c "from PIL import Image; w,h=Image.open(r'''$IDOL''').size; H=$SIZE; W=round(H*w/h/16)*16; print(W, H)" 2>/dev/null || echo "$SIZE $SIZE")
+else
+  PROMPT="$(cat "$HERE/prompt.txt")"; REFS=(-r "$DRESS"); W=$SIZE; H=$SIZE
+fi
+STEPS=20; CFG=2.5; EXTRA=()
 if [ -n "$LORA" ]; then   # 4-step "Lightning" add-on: ~5x faster
   mkdir -p "$M/lora"; get lightx2v/Qwen-Image-Edit-2511-Lightning "$LORA" "$M/lora/lightning.safetensors"
   PROMPT="$PROMPT <lora:lightning:1>"; STEPS=4; CFG=1; EXTRA=(--lora-model-dir "$M/lora")
 fi
 
 OUT="$HERE/out/idol-$(date +%H%M%S).png"
-echo "3/3  generating ${SIZE}px, $STEPS steps on $BACKEND - this can take 10-60 minutes on a CPU"
+echo "3/3  generating ${W}x${H}, $STEPS steps on $BACKEND (seed $SEED) - expect a few hours on a CPU"
 START=$(date +%s)
 "$SD" --diffusion-model "$M/edit.gguf" --vae "$M/vae.safetensors" --llm "$M/llm.gguf" --llm_vision "$M/mmproj.gguf" \
-  -r "$PHOTO" -p "$PROMPT" --cfg-scale $CFG --steps $STEPS --sampling-method euler --flow-shift 3 \
-  --model-args qwen_image_zero_cond_t=true -W $SIZE -H $SIZE --seed 42 --offload-to-cpu "${EXTRA[@]}" -o "$OUT"
+  "${REFS[@]}" -p "$PROMPT" --cfg-scale $CFG --steps $STEPS --sampling-method euler --flow-shift 3 \
+  --model-args qwen_image_zero_cond_t=true -W $W -H $H --seed $SEED --offload-to-cpu "${EXTRA[@]}" -o "$OUT"
 echo "Done in $(( ($(date +%s)-START)/60 )) min -> $OUT"

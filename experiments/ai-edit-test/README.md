@@ -43,3 +43,29 @@ reshaped into a ready-made scene with plain image processing - about **0.5 s per
 free, offline, and every detail of the product is exactly as photographed.
 
 Models, binaries and photos are not committed (see `.gitignore`).
+
+## Test 2: dress a photo of the idol without clothes (recommended)
+
+Instead of letting the AI invent the idol, give it a real photo of the idol with no
+dress. The AI then only has to add the dress: the idol, jewellery, pose and
+background stay from your photo.
+
+1. Put two photos in `C:\Projects\ai-edit-test`:
+   - the dress (flat photo, the whole dress visible), e.g. `dress.jpg`
+   - the idol without clothes, front view, plain background, e.g. `idol_bare.jpg`
+2. In Git Bash:
+   ```bash
+   cd /c/Projects/ai-edit-test
+   bash run.sh dress.jpg idol_bare.jpg
+   ```
+3. Leave the PC on (plugged in, sleep off). Expect a few hours on a CPU - two input
+   photos take longer than one. The result lands in `out/idol-HHMMSS.png`.
+4. Not right? Try another seed (`SEED=7 bash run.sh dress.jpg idol_bare.jpg`) or edit
+   `prompt_idol.txt`. Faster, lower-quality test run: `SIZE=512 bash run.sh ...`
+
+The prompt (`prompt_idol.txt`) calls the idol photo "image 1" and the dress "image 2",
+and spells out how a worn dress sits: top over chest and shoulders, necklaces and hands
+in front of it, skirt from the waist over the legs and spread on the floor.
+
+Always compare the result with the real dress before listing it: the AI redraws the
+dress, so small details (motif count, sequin pattern) can change.
