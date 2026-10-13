@@ -278,33 +278,74 @@ skirt.modifiers.new("thick", "SOLIDIFY").thickness = 0.002
 skirt.modifiers.new("smooth", "SUBSURF").levels = 1
 
 # ------------------------------------------------------------ bodice
-# the front of the bodice photo wrapped round the front of the torso
+# A top that is really worn: from the waist up the chest, over the shoulders
+# to the neck, with a round neckline at the front. It is a shell round the
+# front and sides of the body (the back is never seen).
+# Texture: the bodice photo at its true scale, centred on the front opening.
+# Beyond the photo's edges (sides, shoulder tops) the plain fabric next to the
+# edge continues, so nothing is stretched or invented.
 b = s["bodice"]
 x0, y0, x1, y1 = d["bodice_box"]
-bw_units = (x1 - x0) / UNIT
-bh_units = (y1 - y0) / UNIT
-rb = b["radius"]
-arc = bw_units / rb                       # angle the bodice front covers
+xc = b.get("centre_px", (x0 + x1) / 2)      # the front opening in the dress photo
+pad = b.get("edge_px", [60, 15])           # how far in from the left/right edge is plain fabric
+z_w, z_sh, z_nk = b["bottom"], b["shoulder"], b["neck"]
+r_w, r_ch, r_nk = b["radius"], b["chest_radius"], b["neck_radius"]
+depth = b.get("depth", 0.8)
+cover = math.radians(b.get("cover_deg", 250))   # how far round the body
+neck_half = math.radians(b.get("neckline_deg", 38))
+neck_drop = b.get("neckline_drop", 0.55)        # share of the shoulder cap cut away at the front
+
+
+def profile(t):
+    """t 0..1 from waist to neck -> (radius, height, length along the cloth)."""
+    k = 0.72
+    if t <= k:
+        u = t / k
+        return r_w + (r_ch - r_w) * u, z_w + (z_sh - z_w) * u
+    phi = (t - k) / (1 - k) * math.pi / 2       # over the shoulder
+    return r_nk + (r_ch - r_nk) * math.cos(phi), z_sh + (z_nk - z_sh) * math.sin(phi)
+
+
+nu, nv = 72, 40
+ts = [i / nv for i in range(nv + 1)]
+pts = [profile(t) for t in ts]
+length = [0.0]
+for i in range(1, len(pts)):
+    length.append(length[-1] + math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]))
 bm = bmesh.new()
 uvl = bm.loops.layers.uv.new("UVMap")
-nu, nv = 48, 24
-vs = []
-for i in range(nv + 1):
-    z = b["bottom"] + bh_units * i / nv
+grid, uv = [], {}
+for i, (r, z) in enumerate(pts):
     row = []
     for j in range(nu + 1):
-        a = -math.pi / 2 - arc / 2 + arc * j / nu   # centred on the front (-y)
-        taper = 1 + b.get("flare", 0.08) * (1 - i / nv)
-        row.append(bm.verts.new((rb * taper * math.cos(a), b.get("y", 0) + rb * b.get("depth", 0.85) * taper * math.sin(a), z)))
-    vs.append(row)
+        ang = -cover / 2 + cover * j / nu                 # 0 = front centre
+        v = bm.verts.new((r * math.sin(ang), -r * depth * math.cos(ang), z))
+        arc_len = r_ch * ang                              # along the chest
+        px = min(max(xc + arc_len * UNIT, x0 + pad[0]), x1 - pad[1])
+        py = max(y1 - length[i] * UNIT, y0 + b.get("top_px", 25))
+        uv[v] = uv_of(px, py)
+        row.append(v)
+    grid.append(row)
+
+
+def above_neckline(i, j):
+    ang = -cover / 2 + cover * (j + 0.5) / nu
+    if abs(ang) >= neck_half:
+        return False
+    t = (i + 0.5) / nv
+    cut = 1 - (1 - 0.72) * neck_drop * math.cos(ang / neck_half * math.pi / 2) ** 0.7
+    return t > cut
+
+
 for i in range(nv):
     for j in range(nu):
-        f = bm.faces.new((vs[i][j], vs[i][j + 1], vs[i + 1][j + 1], vs[i + 1][j]))
+        if above_neckline(i, j):
+            continue
+        f = bm.faces.new((grid[i][j], grid[i][j + 1], grid[i + 1][j + 1], grid[i + 1][j]))
         for loop in f.loops:
-            # recover grid position from the vertex
-            vi = next(k for k in range(nv + 1) if loop.vert in vs[k])
-            vj = vs[vi].index(loop.vert)
-            loop[uvl].uv = uv_of(x0 + (x1 - x0) * vj / nu, y1 - (y1 - y0) * vi / nv)
+            loop[uvl].uv = uv[loop.vert]
+loose = [v for v in bm.verts if not v.link_faces]
+bmesh.ops.delete(bm, geom=loose, context="VERTS")
 me = bpy.data.meshes.new("bodice")
 bm.to_mesh(me)
 bm.free()
@@ -313,6 +354,7 @@ scn.collection.objects.link(bodice)
 bodice.data.materials.append(DRESS_MAT)
 for p in bodice.data.polygons:
     p.use_smooth = True
+bodice.modifiers.new("thick", "SOLIDIFY").thickness = 0.006
 bodice.modifiers.new("smooth", "SUBSURF").levels = 1
 
 # ------------------------------------------------------------ light + camera
@@ -355,9 +397,19 @@ a = ren[..., 3:4]
 out = idol[..., :3] * (1 - a) + ren[..., :3] * a
 # the idol's arms, hands, ball and necklace go back on top
 keep = np.zeros((IH, IW), np.float32)
-for poly in CFG["keep_on_top"]:
-    keep = np.maximum(keep, polygon_mask(IH, IW, poly).astype(np.float32))
+shade = np.zeros((IH, IW), np.float32)
+for k, poly in enumerate(CFG["keep_on_top"]):
+    m = polygon_mask(IH, IW, poly).astype(np.float32)
+    keep = np.maximum(keep, m)
+    if k in CFG.get("shade_under_sleeve", []):
+        shade = np.maximum(shade, m)
 keep = box_blur(keep, 1)[..., None]
 out = out * (1 - keep) + idol[..., :3] * keep
+# a soft shadow on the arm just under the sleeve hem
+gap = CFG.get("sleeve_shadow_px", 14)
+dress_above = np.zeros((IH, IW), np.float32)
+dress_above[gap:] = a[:-gap, :, 0]
+dark = box_blur(dress_above * (1 - box_blur(shade, 0)), gap // 2) * shade
+out = out * (1 - 0.45 * np.clip(dark, 0, 1))[..., None]
 save(np.dstack([out, np.ones((IH, IW), np.float32)]), OUT)
 print("saved", OUT)

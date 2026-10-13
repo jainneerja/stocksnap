@@ -30,7 +30,7 @@ Works:
 - Same setup for every dress: only the dress photo changes.
 
 Not yet:
-- **The bodice is a simple wrap.** It has a straight top edge and doesn't cover the shoulders. The flat photo only shows the bodice's front, so shoulders, straps and sleeves would need their own modelling.
+- **The top is a generic shape.** It goes from the waist over the shoulders to a round neckline, with short-sleeve edges on the arms. The flat photo only shows the bodice's front, so the shoulder tops and sides use the plain fabric next to the photo's edge. A dress with long sleeves or a different neckline needs its own shape settings.
 - **Stand-in shapes are rough.** They are boxes and ellipsoids sized by eye. A better match to the idol (especially the legs) gives a more natural drape.
 - **Sequins look flat.** They don't glint as they do in real light.
 - The keep-on-top outlines (arms, necklace) were drawn roughly by hand.
@@ -59,8 +59,8 @@ Set **once per idol photo** (`scene`, in units where 1 = width of the crossed le
 - `camera.anchor_px`: pixel of the idol's waist centre in the idol photo. `px_per_unit`: width of the crossed legs in pixels. `tilt_deg`: how much the camera looks down.
 - `torso`, `lap`: stand-in body and legs that the cloth lands on.
 - `skirt_radius`: how big the dress is on the idol (bigger = wider spread). `waist_height`, `waist_radius`: where the skirt is attached.
-- `bodice`: radius, depth and bottom of the bodice wrap.
-- `keep_on_top`: outlines (pixels in the idol photo) of what stays in front: arms, hand with ball, necklace.
+- `bodice`: the top. Heights `bottom` (waist), `shoulder`, `neck`; radii `radius` (waist), `chest_radius`, `neck_radius`; `cover_deg` (how far round the body), `neckline_deg` / `neckline_drop` (width and depth of the front neckline); `centre_px` (the front opening in the dress photo); `edge_px` / `top_px` (how far in from the photo's edges the plain fabric is).
+- `keep_on_top`: outlines (pixels in the idol photo) of what stays in front: the arms *below the sleeve edge*, the hand with ball, the necklace. `shade_under_sleeve` lists which of them get a soft shadow under the sleeve.
 
 Per dress (`dress_photo`):
 - `skirt_centre`, `skirt_radius_px`: measured automatically from the photo (leave `null`).
@@ -71,7 +71,7 @@ Per dress (`dress_photo`):
 ## Next steps if this is the way
 
 1. Better stand-in shapes, fitted to the idol photo once.
-2. A proper bodice: shoulders/straps from the photo's outline.
+2. Top shapes for other cuts (long sleeves, collars).
 3. Exact camera match (fSpy) instead of the hand-set orthographic camera.
 4. Exact keep-on-top masks (click-to-select) instead of hand-drawn outlines.
 5. Hook into StockSnap's listing photos.

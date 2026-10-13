@@ -19,7 +19,7 @@
    "rx": 0.26,
    "ry": 0.2,
    "bottom": 0.05,
-   "top": 1.05
+   "top": 0.85
   },
   "lap": [
    {
@@ -36,10 +36,23 @@
    }
   ],
   "bodice": {
-   "radius": 0.27,
-   "depth": 0.8,
+   "_note": "heights in scene units: waist (bottom), shoulder, neck; radii round the body",
    "bottom": 0.33,
-   "flare": 0.08
+   "shoulder": 0.9,
+   "neck": 1.04,
+   "radius": 0.27,
+   "chest_radius": 0.31,
+   "neck_radius": 0.12,
+   "depth": 0.78,
+   "cover_deg": 250,
+   "neckline_deg": 40,
+   "neckline_drop": 0.6,
+   "centre_px": 657,
+   "edge_px": [
+    60,
+    45
+   ],
+   "top_px": 25
   },
   "camera": {
    "tilt_deg": 30,
@@ -59,20 +72,28 @@
  "keep_on_top": [
   [
    [
-    342,
-    500
+    318,
+    578
    ],
    [
-    375,
-    505
+    330,
+    566
    ],
    [
-    382,
-    570
+    350,
+    560
+   ],
+   [
+    372,
+    560
+   ],
+   [
+    388,
+    568
    ],
    [
     395,
-    585
+    590
    ],
    [
     392,
@@ -87,26 +108,26 @@
     630
    ],
    [
-    317,
-    590
-   ],
-   [
-    325,
-    535
+    316,
+    600
    ]
   ],
   [
    [
-    535,
-    500
+    540,
+    570
    ],
    [
-    570,
-    510
+    555,
+    561
    ],
    [
-    592,
-    550
+    578,
+    559
+   ],
+   [
+    594,
+    565
    ],
    [
     597,
@@ -142,11 +163,7 @@
    ],
    [
     537,
-    585
-   ],
-   [
-    530,
-    535
+    590
    ]
   ],
   [
@@ -192,5 +209,10 @@
    ]
   ]
  ],
- "_keep_note": "keep_on_top: outlines (pixels in the idol photo) of what stays in front of the dress: arms, hand with ball, necklace."
+ "_keep_note": "keep_on_top: outlines (pixels in the idol photo) of what stays in front of the dress: arms below the sleeve, hand with ball, necklace. shade_under_sleeve: which of them get a soft shadow under the dress edge.",
+ "shade_under_sleeve": [
+  0,
+  1
+ ],
+ "sleeve_shadow_px": 14
 }
