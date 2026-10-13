@@ -1,0 +1,217 @@
+{
+ "dress_photo": {
+  "_note": "skirt_centre / skirt_radius_px: leave null to measure from the photo. bodice_box: [left, top, right, bottom] of the bodice in the dress photo, in pixels.",
+  "skirt_centre": null,
+  "skirt_radius_px": null,
+  "bodice_box": [
+   410,
+   335,
+   905,
+   655
+  ],
+  "bg_threshold": 60
+ },
+ "scene": {
+  "skirt_radius": 1.23,
+  "waist_radius": 0.24,
+  "waist_height": 0.36,
+  "torso": {
+   "rx": 0.21,
+   "ry": 0.17,
+   "bottom": 0.05,
+   "top": 0.85
+  },
+  "lap": [
+   {
+    "centre": [
+     0,
+     -0.12,
+     0.12
+    ],
+    "radii": [
+     0.55,
+     0.38,
+     0.15
+    ]
+   }
+  ],
+  "bodice": {
+   "_note": "heights in scene units: waist (bottom), shoulder, neck; radii round the body",
+   "bottom": 0.33,
+   "shoulder": 0.98,
+   "neck": 1.1,
+   "radius": 0.23,
+   "chest_radius": 0.25,
+   "neck_radius": 0.11,
+   "depth": 0.78,
+   "cover_deg": 250,
+   "neckline_deg": 34,
+   "neckline_drop": 0.55,
+   "centre_px": 657,
+   "edge_px": [
+    60,
+    45
+   ],
+   "top_px": 25,
+   "armhole_deg": 62,
+   "armpit_at": 0.42
+  },
+  "camera": {
+   "tilt_deg": 40,
+   "px_per_unit": 293,
+   "anchor_px": [
+    413,
+    600
+   ]
+  },
+  "bending": 2.0,
+  "frames": 70,
+  "samples": 32,
+  "light": 120,
+  "ambient": 0.6,
+  "_note": "Scene units: 1 = width of the idol's crossed legs. Set once per idol photo."
+ },
+ "keep_on_top": [
+  [
+   [
+    323,
+    458
+   ],
+   [
+    350,
+    455
+   ],
+   [
+    355,
+    483
+   ],
+   [
+    365,
+    510
+   ],
+   [
+    367,
+    557
+   ],
+   [
+    355,
+    568
+   ],
+   [
+    330,
+    568
+   ],
+   [
+    318,
+    547
+   ],
+   [
+    312,
+    510
+   ],
+   [
+    313,
+    480
+   ]
+  ],
+  [
+   [
+    470,
+    457
+   ],
+   [
+    493,
+    463
+   ],
+   [
+    507,
+    500
+   ],
+   [
+    510,
+    550
+   ],
+   [
+    513,
+    600
+   ],
+   [
+    523,
+    627
+   ],
+   [
+    523,
+    667
+   ],
+   [
+    493,
+    670
+   ],
+   [
+    480,
+    640
+   ],
+   [
+    485,
+    607
+   ],
+   [
+    480,
+    560
+   ],
+   [
+    473,
+    527
+   ],
+   [
+    470,
+    487
+   ]
+  ],
+  [
+   [
+    360,
+    430
+   ],
+   [
+    470,
+    430
+   ],
+   [
+    467,
+    477
+   ],
+   [
+    453,
+    510
+   ],
+   [
+    427,
+    540
+   ],
+   [
+    422,
+    592
+   ],
+   [
+    407,
+    592
+   ],
+   [
+    403,
+    540
+   ],
+   [
+    380,
+    513
+   ],
+   [
+    363,
+    480
+   ]
+  ]
+ ],
+ "_keep_note": "keep_on_top: outlines (pixels in the idol photo) of what stays in front of the dress: arms below the sleeve, hand with ball, necklace. shade_under_sleeve: which of them get a soft shadow under the dress edge.",
+ "shade_under_sleeve": [],
+ "sleeve_shadow_px": 14
+}

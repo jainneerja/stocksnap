@@ -2,7 +2,7 @@
 over stand-in shapes of the seated idol, render it with Blender and
 composite it onto the bare idol photo.
 
-    blender -b -P dress3d.py -- dress.jpg idol_bare.jpg out.png     (Blender 4.2 or newer)
+    blender -b -P dress3d.py -- dress.jpg idol_bare.jpg out.png [setup.json]   (Blender 4.2 or newer)
 
 Needs nothing but Blender (its own Python and numpy are used).
 
@@ -23,7 +23,8 @@ import numpy as np
 argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else sys.argv[1:]
 DRESS, IDOL, OUT = (argv + ["dress.jpg", "idol_bare.jpg", "out.png"][len(argv):])[:3]
 HERE = os.path.dirname(os.path.abspath(__file__))
-CFG = json.load(open(os.path.join(HERE, "setup.json"), encoding="utf-8"))
+SETUP = argv[3] if len(argv) > 3 else os.path.join(HERE, "setup.json")   # one settings file per idol photo
+CFG = json.load(open(SETUP, encoding="utf-8"))
 WORK = os.path.join(HERE, "work")
 os.makedirs(WORK, exist_ok=True)
 

@@ -53,6 +53,17 @@ Not yet:
    ```
    Results go to `out/<dress name>.png`. 50 dresses take about an hour and a quarter.
 
+### Two idol photos, two settings files
+
+- `setup.json` is for `idol_bare.jpg` (close, front-on).
+- `setup_idol2.json` is for `idol_bare2.png` (shot from higher, more floor around: **use this one**, it looks much closer to a real dressed idol).
+
+```bash
+"/c/Program Files/Blender Foundation/Blender 4.5/blender.exe" -b -P dress3d.py -- dress.jpg idol_bare2.png out.png setup_idol2.json
+```
+
+For `run_all.sh`: `IDOL=idol_bare2.png SETUP=setup_idol2.json bash run_all.sh`
+
 ## Settings (`setup.json`)
 
 Set **once per idol photo** (`scene`, in units where 1 = width of the crossed legs):

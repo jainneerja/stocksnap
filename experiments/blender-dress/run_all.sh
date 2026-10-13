@@ -18,7 +18,7 @@ n=0
 for f in "${files[@]}"; do
   n=$((n + 1)); name=$(basename "${f%.*}")
   echo "[$n/${#files[@]}] $name"
-  "$BLENDER" -b --factory-startup -P "$HERE/dress3d.py" -- "$f" "$HERE/$IDOL" "$HERE/out/$name.png" 2>&1 \
+  "$BLENDER" -b --factory-startup -P "$HERE/dress3d.py" -- "$f" "$HERE/$IDOL" "$HERE/out/$name.png" "$HERE/${SETUP:-setup.json}" 2>&1 \
     | grep -E "dress photo|saved|Error|Traceback" || true
 done
 echo "Done: $HERE/out"
