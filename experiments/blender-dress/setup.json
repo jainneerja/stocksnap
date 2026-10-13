@@ -1,0 +1,196 @@
+{
+ "dress_photo": {
+  "_note": "skirt_centre / skirt_radius_px: leave null to measure from the photo. bodice_box: [left, top, right, bottom] of the bodice in the dress photo, in pixels.",
+  "skirt_centre": null,
+  "skirt_radius_px": null,
+  "bodice_box": [
+   410,
+   335,
+   905,
+   655
+  ],
+  "bg_threshold": 60
+ },
+ "scene": {
+  "skirt_radius": 1.13,
+  "waist_radius": 0.27,
+  "waist_height": 0.36,
+  "torso": {
+   "rx": 0.26,
+   "ry": 0.2,
+   "bottom": 0.05,
+   "top": 1.05
+  },
+  "lap": [
+   {
+    "centre": [
+     0,
+     -0.12,
+     0.12
+    ],
+    "radii": [
+     0.55,
+     0.36,
+     0.14
+    ]
+   }
+  ],
+  "bodice": {
+   "radius": 0.27,
+   "depth": 0.8,
+   "bottom": 0.33,
+   "flare": 0.08
+  },
+  "camera": {
+   "tilt_deg": 30,
+   "px_per_unit": 405,
+   "anchor_px": [
+    461,
+    720
+   ]
+  },
+  "bending": 0.08,
+  "frames": 70,
+  "samples": 32,
+  "light": 120,
+  "ambient": 0.6,
+  "_note": "Scene units: 1 = width of the idol's crossed legs. Set once per idol photo."
+ },
+ "keep_on_top": [
+  [
+   [
+    342,
+    500
+   ],
+   [
+    375,
+    505
+   ],
+   [
+    382,
+    570
+   ],
+   [
+    395,
+    585
+   ],
+   [
+    392,
+    655
+   ],
+   [
+    340,
+    655
+   ],
+   [
+    322,
+    630
+   ],
+   [
+    317,
+    590
+   ],
+   [
+    325,
+    535
+   ]
+  ],
+  [
+   [
+    535,
+    500
+   ],
+   [
+    570,
+    510
+   ],
+   [
+    592,
+    550
+   ],
+   [
+    597,
+    630
+   ],
+   [
+    600,
+    715
+   ],
+   [
+    612,
+    765
+   ],
+   [
+    610,
+    805
+   ],
+   [
+    565,
+    810
+   ],
+   [
+    545,
+    770
+   ],
+   [
+    552,
+    720
+   ],
+   [
+    542,
+    645
+   ],
+   [
+    537,
+    585
+   ],
+   [
+    530,
+    535
+   ]
+  ],
+  [
+   [
+    385,
+    465
+   ],
+   [
+    520,
+    465
+   ],
+   [
+    530,
+    545
+   ],
+   [
+    515,
+    600
+   ],
+   [
+    480,
+    650
+   ],
+   [
+    470,
+    700
+   ],
+   [
+    447,
+    700
+   ],
+   [
+    440,
+    650
+   ],
+   [
+    405,
+    600
+   ],
+   [
+    385,
+    545
+   ]
+  ]
+ ],
+ "_keep_note": "keep_on_top: outlines (pixels in the idol photo) of what stays in front of the dress: arms, hand with ball, necklace."
+}

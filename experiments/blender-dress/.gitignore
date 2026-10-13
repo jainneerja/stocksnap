@@ -1,0 +1,7 @@
+work/
+out/
+dresses/
+*.png
+*.jpg
+*.jpeg
+!docs/*.jpg
