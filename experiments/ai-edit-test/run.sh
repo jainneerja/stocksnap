@@ -12,6 +12,7 @@
 #   SIZE=512        output height in px (default 640; bigger = much slower)
 #   QUANT=Q3_K_M    smaller/faster model if your PC has 16 GB RAM (default Q4_K_M)
 #   SEED=7          a different try (default 42)
+#   PROMPT_FILE=prompt_idol_short.txt   use another prompt file (default prompt_idol.txt)
 #   BACKEND=vulkan  try the Intel/AMD graphics chip instead of the CPU
 set -euo pipefail
 DRESS="${1:?Usage: bash run.sh <dress-photo> [idol-photo]}"
@@ -55,7 +56,10 @@ get Comfy-Org/Qwen-Image_ComfyUI split_files/vae/qwen_image_vae.safetensors "$M/
 
 if [ -n "$IDOL" ]; then
   # image 1 = the idol photo (what gets edited), image 2 = the dress
-  PROMPT="$(cat "$HERE/prompt_idol.txt")"; REFS=(-r "$IDOL" -r "$DRESS")
+  PF="${PROMPT_FILE:-prompt_idol.txt}"; [ -f "$HERE/$PF" ] || { echo "Can't find $PF"; exit 1; }
+  # one line, plain text: markdown marks and line breaks don't help the model
+  PROMPT="$(tr '\r\n' '  ' < "$HERE/$PF" | sed 's/\*\*//g; s/  */ /g')"; REFS=(-r "$IDOL" -r "$DRESS")
+  echo "  prompt: $PF ($(echo "$PROMPT" | wc -w) words)"
   # output keeps the idol photo's shape (sides rounded to 16 px)
   read -r W H < <("$PY" -c "from PIL import Image; w,h=Image.open(r'''$IDOL''').size; H=$SIZE; W=round(H*w/h/16)*16; print(W, H)" 2>/dev/null || echo "$SIZE $SIZE")
 else
