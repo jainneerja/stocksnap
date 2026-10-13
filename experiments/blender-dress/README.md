@@ -30,7 +30,7 @@ Works:
 - Same setup for every dress: only the dress photo changes.
 
 Not yet:
-- **The top is a generic shape.** It goes from the waist over the shoulders to a round neckline, with short-sleeve edges on the arms. The flat photo only shows the bodice's front, so the shoulder tops and sides use the plain fabric next to the photo's edge. A dress with long sleeves or a different neckline needs its own shape settings.
+- **The top is a sleeveless vest** (like these dresses are worn): from the waist to a round neckline, with armholes; the bodice photo spans the front between the armholes, so its edge trims become the armhole trims. Set `armhole_deg` to null for a top with sleeves. The flat photo only shows the front; the back is never seen.
 - **Stand-in shapes are rough.** They are boxes and ellipsoids sized by eye. A better match to the idol (especially the legs) gives a more natural drape.
 - **Sequins look flat.** They don't glint as they do in real light.
 - The keep-on-top outlines (arms, necklace) were drawn roughly by hand.
@@ -59,7 +59,7 @@ Set **once per idol photo** (`scene`, in units where 1 = width of the crossed le
 - `camera.anchor_px`: pixel of the idol's waist centre in the idol photo. `px_per_unit`: width of the crossed legs in pixels. `tilt_deg`: how much the camera looks down.
 - `torso`, `lap`: stand-in body and legs that the cloth lands on.
 - `skirt_radius`: how big the dress is on the idol (bigger = wider spread). `waist_height`, `waist_radius`: where the skirt is attached.
-- `bodice`: the top. Heights `bottom` (waist), `shoulder`, `neck`; radii `radius` (waist), `chest_radius`, `neck_radius`; `cover_deg` (how far round the body), `neckline_deg` / `neckline_drop` (width and depth of the front neckline); `centre_px` (the front opening in the dress photo); `edge_px` / `top_px` (how far in from the photo's edges the plain fabric is).
+- `bodice`: the top. Heights `bottom` (waist), `shoulder`, `neck`; radii `radius` (waist), `chest_radius`, `neck_radius`; `cover_deg` (how far round the body), `neckline_deg` / `neckline_drop` (width and depth of the front neckline); `armhole_deg` / `armpit_at` (sleeveless top: where the armholes are; null = sleeves); `centre_px` (the front opening in the dress photo); `edge_px` / `top_px` (how far in from the photo's edges the plain fabric is).
 - `keep_on_top`: outlines (pixels in the idol photo) of what stays in front: the arms *below the sleeve edge*, the hand with ball, the necklace. `shade_under_sleeve` lists which of them get a soft shadow under the sleeve.
 
 Per dress (`dress_photo`):

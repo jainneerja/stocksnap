@@ -12,7 +12,7 @@
   "bg_threshold": 60
  },
  "scene": {
-  "skirt_radius": 1.25,
+  "skirt_radius": 1.2,
   "waist_radius": 0.27,
   "waist_height": 0.36,
   "torso": {
@@ -38,21 +38,23 @@
   "bodice": {
    "_note": "heights in scene units: waist (bottom), shoulder, neck; radii round the body",
    "bottom": 0.33,
-   "shoulder": 0.88,
-   "neck": 1.02,
-   "radius": 0.29,
-   "chest_radius": 0.33,
-   "neck_radius": 0.13,
+   "shoulder": 0.9,
+   "neck": 1.03,
+   "radius": 0.28,
+   "chest_radius": 0.3,
+   "neck_radius": 0.12,
    "depth": 0.78,
-   "cover_deg": 260,
-   "neckline_deg": 40,
-   "neckline_drop": 0.6,
+   "cover_deg": 250,
+   "neckline_deg": 34,
+   "neckline_drop": 0.55,
    "centre_px": 657,
    "edge_px": [
     60,
     45
    ],
-   "top_px": 25
+   "top_px": 25,
+   "armhole_deg": 62,
+   "armpit_at": 0.42
   },
   "camera": {
    "tilt_deg": 30,
@@ -62,7 +64,7 @@
     720
    ]
   },
-  "bending": 0.6,
+  "bending": 2.0,
   "frames": 70,
   "samples": 32,
   "light": 120,
@@ -72,20 +74,20 @@
  "keep_on_top": [
   [
    [
-    320,
-    580
+    330,
+    540
    ],
    [
-    336,
-    566
+    352,
+    526
    ],
    [
-    360,
-    561
+    372,
+    530
    ],
    [
     384,
-    568
+    560
    ],
    [
     396,
@@ -105,25 +107,29 @@
    ],
    [
     316,
-    605
+    590
+   ],
+   [
+    322,
+    560
    ]
   ],
   [
    [
-    542,
-    598
+    545,
+    535
    ],
    [
-    558,
-    590
+    565,
+    522
    ],
    [
-    578,
-    588
+    585,
+    532
    ],
    [
-    595,
-    594
+    594,
+    560
    ],
    [
     597,
@@ -156,6 +162,14 @@
    [
     542,
     645
+   ],
+   [
+    537,
+    585
+   ],
+   [
+    538,
+    555
    ]
   ],
   [
@@ -202,9 +216,6 @@
   ]
  ],
  "_keep_note": "keep_on_top: outlines (pixels in the idol photo) of what stays in front of the dress: arms below the sleeve, hand with ball, necklace. shade_under_sleeve: which of them get a soft shadow under the dress edge.",
- "shade_under_sleeve": [
-  0,
-  1
- ],
+ "shade_under_sleeve": [],
  "sleeve_shadow_px": 14
 }

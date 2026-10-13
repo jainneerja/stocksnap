@@ -315,13 +315,20 @@ for i in range(1, len(pts)):
 bm = bmesh.new()
 uvl = bm.loops.layers.uv.new("UVMap")
 grid, uv = [], {}
+armhole = math.radians(b["armhole_deg"]) if b.get("armhole_deg") else 0
+armpit = b.get("armpit_at", 0.45)
 for i, (r, z) in enumerate(pts):
     row = []
     for j in range(nu + 1):
         ang = -cover / 2 + cover * j / nu                 # 0 = front centre
         v = bm.verts.new((r * math.sin(ang), -r * depth * math.cos(ang), z))
-        arc_len = r_ch * ang                              # along the chest
-        px = min(max(xc + arc_len * UNIT, x0 + pad[0]), x1 - pad[1])
+        if armhole and abs(ang) <= armhole:
+            # sleeveless top: the whole bodice photo spans the front between
+            # the armholes, so its edge trims become the armhole trims
+            px = x0 + (ang + armhole) / (2 * armhole) * (x1 - x0)
+        else:
+            arc_len = r_ch * ang                          # along the chest
+            px = min(max(xc + arc_len * UNIT, x0 + pad[0]), x1 - pad[1])
         py = max(y1 - length[i] * UNIT, y0 + b.get("top_px", 25))
         uv[v] = uv_of(px, py)
         row.append(v)
@@ -330,6 +337,8 @@ for i, (r, z) in enumerate(pts):
 
 def above_neckline(i, j):
     ang = -cover / 2 + cover * (j + 0.5) / nu
+    if armhole and abs(ang) > armhole and (i + 0.5) / nv > armpit:
+        return True                     # armhole: no sleeve, the arm comes out here
     if abs(ang) >= neck_half:
         return False
     t = (i + 0.5) / nv
@@ -339,7 +348,7 @@ def above_neckline(i, j):
 
 for i in range(nv):
     for j in range(nu):
-        if above_neckline(i, j):
+        if above_neckline(i, j):  # neckline or armhole
             continue
         f = bm.faces.new((grid[i][j], grid[i][j + 1], grid[i + 1][j + 1], grid[i + 1][j]))
         for loop in f.loops:
