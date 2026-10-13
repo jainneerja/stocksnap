@@ -298,7 +298,7 @@ neck_drop = b.get("neckline_drop", 0.55)        # share of the shoulder cap cut 
 
 def profile(t):
     """t 0..1 from waist to neck -> (radius, height, length along the cloth)."""
-    k = 0.72
+    k = b.get("shoulder_at", 0.65)
     if t <= k:
         u = t / k
         return r_w + (r_ch - r_w) * u, z_w + (z_sh - z_w) * u
@@ -333,7 +333,7 @@ def above_neckline(i, j):
     if abs(ang) >= neck_half:
         return False
     t = (i + 0.5) / nv
-    cut = 1 - (1 - 0.72) * neck_drop * math.cos(ang / neck_half * math.pi / 2) ** 0.7
+    cut = 1 - (1 - b.get("shoulder_at", 0.65)) * neck_drop * math.cos(ang / neck_half * math.pi / 2) ** 0.7
     return t > cut
 
 

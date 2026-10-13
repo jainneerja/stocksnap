@@ -12,7 +12,7 @@
   "bg_threshold": 60
  },
  "scene": {
-  "skirt_radius": 1.13,
+  "skirt_radius": 1.25,
   "waist_radius": 0.27,
   "waist_height": 0.36,
   "torso": {
@@ -29,22 +29,22 @@
      0.12
     ],
     "radii": [
-     0.55,
-     0.36,
-     0.14
+     0.6,
+     0.4,
+     0.16
     ]
    }
   ],
   "bodice": {
    "_note": "heights in scene units: waist (bottom), shoulder, neck; radii round the body",
    "bottom": 0.33,
-   "shoulder": 0.9,
-   "neck": 1.04,
-   "radius": 0.27,
-   "chest_radius": 0.31,
-   "neck_radius": 0.12,
+   "shoulder": 0.88,
+   "neck": 1.02,
+   "radius": 0.29,
+   "chest_radius": 0.33,
+   "neck_radius": 0.13,
    "depth": 0.78,
-   "cover_deg": 250,
+   "cover_deg": 260,
    "neckline_deg": 40,
    "neckline_drop": 0.6,
    "centre_px": 657,
@@ -62,7 +62,7 @@
     720
    ]
   },
-  "bending": 0.08,
+  "bending": 0.6,
   "frames": 70,
   "samples": 32,
   "light": 120,
@@ -72,28 +72,24 @@
  "keep_on_top": [
   [
    [
-    318,
-    578
+    320,
+    580
    ],
    [
-    330,
+    336,
     566
    ],
    [
-    350,
-    560
+    360,
+    561
    ],
    [
-    372,
-    560
-   ],
-   [
-    388,
+    384,
     568
    ],
    [
-    395,
-    590
+    396,
+    595
    ],
    [
     392,
@@ -104,30 +100,30 @@
     655
    ],
    [
-    322,
+    320,
     630
    ],
    [
     316,
-    600
+    605
    ]
   ],
   [
    [
-    540,
-    570
+    542,
+    598
    ],
    [
-    555,
-    561
+    558,
+    590
    ],
    [
     578,
-    559
+    588
    ],
    [
-    594,
-    565
+    595,
+    594
    ],
    [
     597,
@@ -160,10 +156,6 @@
    [
     542,
     645
-   ],
-   [
-    537,
-    590
    ]
   ],
   [
