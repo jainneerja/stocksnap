@@ -43,6 +43,17 @@ python swap.py ref_blue.png dress.jpg out.png swap_bare.json idol_bare4.png
 `align.ref_eyes` / `align.base_eyes`: the two pupils in each photo.
 `align.base_keep_on_top`: arms, hand with ball and hair in the bare photo.
 
+## Add a necklace afterwards
+
+```bash
+python add_necklace.py out.png ref_blue_neck.png out_with_necklace.png necklace_blue.json
+```
+
+Lifts the necklace out of another photo and lays it on the finished image, lined up
+by the eyes, with a soft shadow. Easiest when the necklace lies on a plain coloured
+top (`"lies_on": "blue"`: everything inside the outline that isn't blue). On bare
+gold skin it has to pick pearls and stones by colour, which is much less reliable.
+
 ## Settings (`swap.json`), set once per reference photo, in its pixels
 
 - `skirt.waist_centre` / `waist_radii`, `hem_centre` / `hem_radii`: the skirt's
