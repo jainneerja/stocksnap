@@ -47,10 +47,14 @@ if neck is None:   # necklace on bare gold skin: harder, pick pearls and stones 
 # 2. line the source up with the finished image by the eyes
 (sx1, sy1), (sx2, sy2) = c["src_eyes"]
 (dx1, dy1), (dx2, dy2) = c["dst_eyes"]
-k = math.hypot(dx2 - dx1, dy2 - dy1) / math.hypot(sx2 - sx1, sy2 - sy1)
+k = math.hypot(dx2 - dx1, dy2 - dy1) / math.hypot(sx2 - sx1, sy2 - sy1) * c.get("scale", 1.0)
 smx, smy, dmx, dmy = (sx1 + sx2) / 2, (sy1 + sy2) / 2, (dx1 + dx2) / 2, (dy1 + dy2) / 2
 off = c.get("nudge", [0, 0])
-M = np.float32([[k, 0, dmx - k * smx + off[0]], [0, k, dmy - k * smy + off[1]]])
+# scale round the top of the necklace (where it sits on the neck), not the eyes
+top = min(p[1] for p in c["outline"])
+k0 = k / c.get("scale", 1.0)
+ay = dmy + k0 * (top - smy)               # where the necklace top lands at scale 1
+M = np.float32([[k, 0, dmx - k * smx + off[0]], [0, k, ay - k * top + off[1]]])
 piece = cv2.warpAffine(src, M, (W, H), flags=cv2.INTER_LINEAR)
 mask = cv2.warpAffine(neck, M, (W, H), flags=cv2.INTER_LINEAR).astype(np.float32) / 255
 mask = cv2.GaussianBlur(mask, (3, 3), 0)

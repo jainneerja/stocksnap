@@ -42,6 +42,8 @@ if BASE:
     sk["hem_radii"] = [v * k for v in sk["hem_radii"]]
     c["bodice"]["quad"] = [T(p) for p in c["bodice"]["quad"]]
     c["old_dress_outline"] = [T(p) for p in c["old_dress_outline"]]
+    if c["align"].get("base_v_neck"):
+        c["bodice"]["v_neck"] = c["align"]["base_v_neck"]
     if c["align"].get("base_straps"):
         c["bodice"]["straps"] = c["align"]["base_straps"]
     c["keep_on_top"] = c["align"].get("base_keep_on_top") or [[T(p) for p in poly] for poly in c["keep_on_top"]]
@@ -260,6 +262,35 @@ if straps:
     sm = cv2.GaussianBlur(strap_mask.astype(np.float32) / 255, (3, 3), 0)
     layer = layer * (1 - sm[..., None]) + strap_img * sm[..., None]
     alpha = np.maximum(alpha, sm)
+
+# V neckline: cut a V out of the vest (the idol's chest shows there) and edge both
+# sides of the V with a strip of the dress's own gold trim.
+vn = b.get("v_neck")
+if vn:
+    L_, R_, B_ = [np.float32(vn[k]) for k in ("left", "right", "bottom")]
+    v_mask = np.zeros((H, W), np.uint8)
+    top_l = L_ + np.float32([0, -40]); top_r = R_ + np.float32([0, -40])
+    cv2.fillPoly(v_mask, [np.int32([top_l, L_, B_, R_, top_r])], 255)
+    vm = cv2.GaussianBlur(v_mask.astype(np.float32) / 255, (3, 3), 0)
+    alpha = alpha * (1 - vm)
+    tx0, tx1, ty0, ty1 = vn["trim_src"]
+    trim = dress[ty0:ty1, tx0:tx1]
+    tw = vn.get("trim_px", 12)
+    for P, Q in ((L_, B_), (R_, B_)):
+        d_ = Q - P
+        length = float(np.hypot(*d_))
+        n_ = np.float32([-d_[1], d_[0]]) / length
+        if np.dot(n_, (L_ + R_) / 2 - P) > 0:     # trim lies on the vest side, outside the V
+            n_ = -n_
+        strip = cv2.resize(cv2.rotate(trim, cv2.ROTATE_90_CLOCKWISE) if False else trim, (tw, max(int(length), 2)))
+        src = np.float32([[0, 0], [tw, 0], [0, strip.shape[0]]])
+        dstp = np.float32([P, P + n_ * tw, Q])
+        M2 = cv2.getAffineTransform(src, dstp)
+        warped = cv2.warpAffine(strip, M2, (W, H), flags=cv2.INTER_LINEAR)
+        mk = cv2.warpAffine(np.full(strip.shape[:2], 255, np.uint8), M2, (W, H)).astype(np.float32) / 255
+        mk = cv2.GaussianBlur(mk, (3, 3), 0)
+        layer = layer * (1 - mk[..., None]) + warped.astype(np.float32) * mk[..., None]
+        alpha = np.maximum(alpha, mk)
 
 # ---- shading from the old dress (soft, so its pattern doesn't show through)
 gray = cv2.cvtColor(ref, cv2.COLOR_BGR2GRAY).astype(np.float32)
