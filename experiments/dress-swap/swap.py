@@ -233,7 +233,20 @@ out = plate.astype(np.float32) * (1 - a) + layer * a
 keep = np.zeros((H, W), np.uint8)
 for poly in c["keep_on_top"]:
     cv2.fillPoly(keep, [np.int32(poly)], 255)
-keep = cv2.GaussianBlur(keep.astype(np.float32) / 255, (5, 5), 0)[..., None]
+if base is not None and c.get("keep_trim_cloth", True):
+    # outlines may be loose on the outside: drop the floor cloth from them, so the
+    # arm's real edge is used (the cloth colour is learnt from the photo's border)
+    edge = np.concatenate([base[-40:].reshape(-1, 3), base[:, :20].reshape(-1, 3), base[:, -20:].reshape(-1, 3)])
+    cloth_col = np.median(edge, axis=0)
+    is_cloth = (np.abs(base.astype(int) - cloth_col).sum(axis=2) < c.get("cloth_tol", 45)).astype(np.uint8)
+    is_cloth = cv2.morphologyEx(is_cloth, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+    keep[is_cloth > 0] = 0
+    keep = cv2.morphologyEx(keep, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+# a soft contact shadow round what stays on top (hands resting on the dress)
+ring = cv2.GaussianBlur(keep.astype(np.float32) / 255, (0, 0), c.get("contact_shadow_px", 6))
+ring = np.clip(ring - keep.astype(np.float32) / 255, 0, 1)
+out = out * (1 - c.get("contact_shadow", 0.45) * ring[..., None])
+keep = cv2.GaussianBlur(keep.astype(np.float32) / 255, (3, 3), 0)[..., None]
 out = out * (1 - keep) + (base if base is not None else ref).astype(np.float32) * keep
 cv2.imwrite(OUT, np.clip(out, 0, 255).astype(np.uint8))
 print("saved", OUT)
