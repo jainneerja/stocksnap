@@ -186,6 +186,47 @@ upper = np.zeros((H, W), bool)
 upper[qt: qt + int((qb - qt) * b.get("neck_share", 0.5))] = True
 alpha = np.where((in_quad > 0) & upper & (tm < 0.5), 0, alpha)
 
+# Fit the bodice photo to the top's real outline, row by row: its left and right
+# edges (the gold armhole trims) land on the top's edges instead of being cut off.
+if b.get("fit_rows", True):
+    tmb = (tm > 0.5) & (in_quad > 0)
+    rows = np.nonzero(tmb.any(axis=1))[0]
+    if len(rows):
+        r0, r1 = rows.min(), rows.max()
+        mapx = np.full((H, W), -1, np.float32)
+        mapy = np.full((H, W), -1, np.float32)
+        ys_ = np.arange(r0, r1 + 1)
+        L = np.array([np.nonzero(tmb[y])[0].min() if tmb[y].any() else np.nan for y in ys_])
+        R = np.array([np.nonzero(tmb[y])[0].max() if tmb[y].any() else np.nan for y in ys_])
+        ok = ~np.isnan(L)
+        L = np.interp(ys_, ys_[ok], L[ok]); R = np.interp(ys_, ys_[ok], R[ok])
+        # smooth edges: the colour mask is ragged, a garment edge is not
+        from scipy.ndimage import median_filter, gaussian_filter1d
+        L = gaussian_filter1d(median_filter(L, 15), 4); R = gaussian_filter1d(median_filter(R, 15), 4)
+        smooth = np.zeros((H, W), bool)
+        for i, y in enumerate(ys_):
+            lft, rgt = int(round(L[i])), int(round(R[i]))
+            if rgt - lft < 2:
+                continue
+            u = (np.arange(lft, rgt + 1) - lft) / (rgt - lft)
+            v = (y - r0) / max(r1 - r0, 1)
+            mapx[y, lft:rgt + 1] = bx0 + u * (bx1 - bx0)
+            mapy[y, lft:rgt + 1] = by0 + v * (by1 - by0)
+            smooth[y, lft:rgt + 1] = True
+        # keep the neckline hole from the old top, but use the smooth outer edges
+        hole = smooth & ~tmb & ~cv2.dilate(tmb.astype(np.uint8), np.ones((1, 9), np.uint8)).astype(bool)
+        neck_hole = np.zeros((H, W), bool)
+        n_, lab_, st_, _ = cv2.connectedComponentsWithStats(hole.astype(np.uint8))
+        for k_ in range(1, n_):
+            if st_[k_, cv2.CC_STAT_AREA] > 300:
+                neck_hole |= lab_ == k_
+        tm = np.where(in_quad > 0, (smooth & ~neck_hole).astype(np.float32), tm)
+        tm = cv2.GaussianBlur(tm, (3, 3), 0)
+        alpha = np.where((in_quad > 0) & (tm > 0.5), np.maximum(alpha, tm), alpha)
+        fitted = cv2.remap(dress, mapx, mapy, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE).astype(np.float32)
+        w2 = (tm * in_quad * (mapx >= 0))[..., None]
+        layer = layer * (1 - w2) + fitted * w2
+
 # ---- shading from the old dress (soft, so its pattern doesn't show through)
 gray = cv2.cvtColor(ref, cv2.COLOR_BGR2GRAY).astype(np.float32)
 soft = cv2.GaussianBlur(gray, (0, 0), c.get("shade_blur", 18))
