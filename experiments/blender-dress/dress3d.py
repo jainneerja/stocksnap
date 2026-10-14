@@ -193,6 +193,13 @@ for i, lp in enumerate(s["lap"]):
     bpy.ops.object.transform_apply(scale=True)
     proxy(lap)
 
+# neck: hides the back of the top behind the neck (no collision needed)
+nk = s.get("neck_proxy")
+if nk:
+    bpy.ops.mesh.primitive_cylinder_add(vertices=32, radius=nk["radius"], depth=nk["top"] - nk["bottom"],
+                                        location=(0, nk.get("y", 0), (nk["top"] + nk["bottom"]) / 2))
+    proxy(bpy.context.object, collide=False)
+
 # floor: collision + shadow catcher
 bpy.ops.mesh.primitive_plane_add(size=12, location=(0, 0, 0))
 floor = bpy.context.object
@@ -307,50 +314,55 @@ def profile(t):
     return r_nk + (r_ch - r_nk) * math.cos(phi), z_sh + (z_nk - z_sh) * math.sin(phi)
 
 
-nu, nv = 72, 40
-ts = [i / nv for i in range(nv + 1)]
-pts = [profile(t) for t in ts]
-length = [0.0]
-for i in range(1, len(pts)):
-    length.append(length[-1] + math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]))
+nu, nv = 144, 48
+K = b.get("shoulder_at", 0.65)
+armhole = math.radians(b["armhole_deg"]) if b.get("armhole_deg") else 0
+armpit = b.get("armpit_at", 0.45)
+arm_band = math.radians(b.get("armhole_curve_deg", 18))
+
+
+def top_t(ang):
+    """How high the top reaches at this angle round the body (1 = neck).
+    The neckline and the armholes are smooth curves, not steps."""
+    t = 1.0
+    if abs(ang) < neck_half:
+        t = 1 - (1 - K) * neck_drop * math.cos(ang / neck_half * math.pi / 2) ** 0.7
+    if armhole and abs(ang) > armhole:
+        u = min((abs(ang) - armhole) / arm_band, 1.0)        # 0 at the strap edge, 1 under the arm
+        t = min(t, 1 - (1 - armpit) * math.sin(u * math.pi / 2))
+    return t
+
+
+cols = []
+for j in range(nu + 1):
+    ang = -cover / 2 + cover * j / nu                     # 0 = front centre
+    cols.append((ang, top_t(ang)))
 bm = bmesh.new()
 uvl = bm.loops.layers.uv.new("UVMap")
 grid, uv = [], {}
-armhole = math.radians(b["armhole_deg"]) if b.get("armhole_deg") else 0
-armpit = b.get("armpit_at", 0.45)
-for i, (r, z) in enumerate(pts):
+# arc length along the profile, for the photo's vertical scale
+fine = [profile(t / 400) for t in range(401)]
+flen = [0.0]
+for i in range(1, len(fine)):
+    flen.append(flen[-1] + math.hypot(fine[i][0] - fine[i - 1][0], fine[i][1] - fine[i - 1][1]))
+for i in range(nv + 1):
     row = []
-    for j in range(nu + 1):
-        ang = -cover / 2 + cover * j / nu                 # 0 = front centre
+    for j, (ang, tt) in enumerate(cols):
+        t = tt * i / nv
+        r, z = profile(t)
         v = bm.verts.new((r * math.sin(ang), -r * depth * math.cos(ang), z))
         if armhole and abs(ang) <= armhole:
             # sleeveless top: the whole bodice photo spans the front between
             # the armholes, so its edge trims become the armhole trims
             px = x0 + (ang + armhole) / (2 * armhole) * (x1 - x0)
         else:
-            arc_len = r_ch * ang                          # along the chest
-            px = min(max(xc + arc_len * UNIT, x0 + pad[0]), x1 - pad[1])
-        py = max(y1 - length[i] * UNIT, y0 + b.get("top_px", 25))
+            px = min(max(xc + r_ch * ang * UNIT, x0 + pad[0]), x1 - pad[1])
+        py = max(y1 - flen[int(round(t * 400))] * UNIT, y0 + b.get("top_px", 25))
         uv[v] = uv_of(px, py)
         row.append(v)
     grid.append(row)
-
-
-def above_neckline(i, j):
-    ang = -cover / 2 + cover * (j + 0.5) / nu
-    if armhole and abs(ang) > armhole and (i + 0.5) / nv > armpit:
-        return True                     # armhole: no sleeve, the arm comes out here
-    if abs(ang) >= neck_half:
-        return False
-    t = (i + 0.5) / nv
-    cut = 1 - (1 - b.get("shoulder_at", 0.65)) * neck_drop * math.cos(ang / neck_half * math.pi / 2) ** 0.7
-    return t > cut
-
-
 for i in range(nv):
     for j in range(nu):
-        if above_neckline(i, j):  # neckline or armhole
-            continue
         f = bm.faces.new((grid[i][j], grid[i][j + 1], grid[i + 1][j + 1], grid[i + 1][j]))
         for loop in f.loops:
             loop[uvl].uv = uv[loop.vert]
