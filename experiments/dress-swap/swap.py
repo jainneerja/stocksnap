@@ -223,7 +223,7 @@ if leftover.any():
 
 # soft shadow of the new skirt on the floor
 sh = cv2.GaussianBlur(cv2.dilate((skirt_alpha > 0.5).astype(np.float32), np.ones((5, 5), np.uint8)), (0, 0), 6)
-sh = np.roll(sh, 5, axis=0)
+sh = np.vstack([np.zeros((5, W), np.float32), sh[:-5]])   # shift down, no wrap-around
 plate = (plate.astype(np.float32) * (1 - 0.25 * sh[..., None] * (alpha[..., None] < 0.5))).astype(np.uint8)
 
 a = cv2.GaussianBlur(alpha, (3, 3), 0)[..., None]

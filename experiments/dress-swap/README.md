@@ -43,6 +43,16 @@ python swap.py ref_blue.png dress.jpg out.png swap_bare.json idol_bare4.png
 `align.ref_eyes` / `align.base_eyes`: the two pupils in each photo.
 `align.base_keep_on_top`: arms, hand with ball and hair in the bare photo.
 
+### Best bare photo so far: `idol_bare6.png`
+
+Made with an AI app using the "same framing as the reference" prompt. Lined up by
+the body (neck and waist), not the eyes, because the head/body proportions differ:
+
+```bash
+python swap.py ref_blue.png dress.jpg out.png swap_bare6.json idol_bare6.png
+python add_necklace.py out.png ref_blue_neck.png out_final.png necklace_b6.json
+```
+
 ## Add a necklace afterwards
 
 ```bash
