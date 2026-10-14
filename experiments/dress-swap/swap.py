@@ -42,6 +42,8 @@ if BASE:
     sk["hem_radii"] = [v * k for v in sk["hem_radii"]]
     c["bodice"]["quad"] = [T(p) for p in c["bodice"]["quad"]]
     c["old_dress_outline"] = [T(p) for p in c["old_dress_outline"]]
+    if c["align"].get("base_straps"):
+        c["bodice"]["straps"] = c["align"]["base_straps"]
     c["keep_on_top"] = c["align"].get("base_keep_on_top") or [[T(p) for p in poly] for poly in c["keep_on_top"]]
 H, W = ref.shape[:2]
 dress = cv2.imread(DRESS)
@@ -227,6 +229,38 @@ if b.get("fit_rows", True):
         w2 = (tm * in_quad * (mapx >= 0))[..., None]
         layer = layer * (1 - w2) + fitted * w2
 
+# Shoulder straps (cap sleeves): the vest goes over the shoulders. Each strap is a
+# polygon in the final image; the bodice photo's side edge (its gold trim) runs
+# along the strap's outer edge, plain fabric towards the neck.
+strap_mask = np.zeros((H, W), np.uint8)
+straps = b.get("straps") or []
+if straps:
+    sx = (bx1 - bx0) / max(W * 0.12, 1)
+    rows_fit = np.nonzero(((tm > 0.5) & (in_quad > 0)).any(axis=1))[0]
+    if len(rows_fit):
+        y_mid = rows_fit.min() + 5
+        xs_mid = np.nonzero((tm[y_mid] > 0.5) & (in_quad[y_mid] > 0))[0]
+        if len(xs_mid) > 2:
+            sx = (bx1 - bx0) / (xs_mid.max() - xs_mid.min())
+    mx = np.full((H, W), -1, np.float32)
+    my = np.full((H, W), -1, np.float32)
+    for side, poly in enumerate(straps):
+        m = np.zeros((H, W), np.uint8)
+        cv2.fillPoly(m, [np.int32(poly)], 255)
+        strap_mask |= m
+        ys_s = np.nonzero(m.any(axis=1))[0]
+        for y in ys_s:
+            xs_ = np.nonzero(m[y])[0]
+            if side == 0:     # left of the picture: outer edge = smallest x
+                mx[y, xs_] = bx0 + (xs_ - xs_.min()) * sx
+            else:
+                mx[y, xs_] = bx1 - (xs_.max() - xs_) * sx
+            my[y, xs_] = by0 + b.get("top_px", 25) + (y - ys_s.min()) * sx * 0.6
+    strap_img = cv2.remap(dress, mx, my, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE).astype(np.float32)
+    sm = cv2.GaussianBlur(strap_mask.astype(np.float32) / 255, (3, 3), 0)
+    layer = layer * (1 - sm[..., None]) + strap_img * sm[..., None]
+    alpha = np.maximum(alpha, sm)
+
 # ---- shading from the old dress (soft, so its pattern doesn't show through)
 gray = cv2.cvtColor(ref, cv2.COLOR_BGR2GRAY).astype(np.float32)
 soft = cv2.GaussianBlur(gray, (0, 0), c.get("shade_blur", 18))
@@ -283,6 +317,7 @@ if base is not None and c.get("keep_trim_cloth", True):
     is_cloth = cv2.morphologyEx(is_cloth, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
     keep[is_cloth > 0] = 0
     keep = cv2.morphologyEx(keep, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+keep[strap_mask > 0] = 0
 # a soft contact shadow round what stays on top (hands resting on the dress)
 ring = cv2.GaussianBlur(keep.astype(np.float32) / 255, (0, 0), c.get("contact_shadow_px", 6))
 ring = np.clip(ring - keep.astype(np.float32) / 255, 0, 1)
