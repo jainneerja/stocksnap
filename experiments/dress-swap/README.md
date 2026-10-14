@@ -29,6 +29,20 @@ python swap.py ref_blue.png dress.jpg out.png swap.json
 (needs `opencv-python` and `numpy`, already installed with StockSnap's backend).
 For many dresses: loop over the dress photos with the same reference and settings.
 
+## On a bare-idol photo
+
+Give a photo of the idol **without** a dress (and without a necklace) as the last
+argument. The dress then goes onto that photo; the reference only lends the dress's
+shape and shading, lined up by the eyes (`align` in `swap_bare.json`). No trims or
+jewellery from the reference come along.
+
+```bash
+python swap.py ref_blue.png dress.jpg out.png swap_bare.json idol_bare4.png
+```
+
+`align.ref_eyes` / `align.base_eyes`: the two pupils in each photo.
+`align.base_keep_on_top`: arms, hand with ball and hair in the bare photo.
+
 ## Settings (`swap.json`), set once per reference photo, in its pixels
 
 - `skirt.waist_centre` / `waist_radii`, `hem_centre` / `hem_radii`: the skirt's

@@ -5,7 +5,10 @@ The new dress's flat photo is bent onto that shape (skirt: rings from the waist
 out to the hem; bodice: onto the old bodice), the old dress's soft shading is
 laid over it, and the idol's arms, hands and hair stay on top.
 
-    python swap.py ref_blue.png dress.jpg out.png swap.json
+    python swap.py ref_blue.png dress.jpg out.png swap.json [bare_idol.png]
+
+With a bare-idol photo as the last argument, the dress goes onto that photo
+instead; the reference only lends the dress's shape and shading.
 """
 import json
 import math
@@ -15,8 +18,31 @@ import cv2
 import numpy as np
 
 REF, DRESS, OUT, CFG = sys.argv[1:5]
+BASE = sys.argv[5] if len(sys.argv) > 5 else None
 c = json.load(open(CFG))
 ref = cv2.imread(REF)
+base = None
+if BASE:
+    # A photo of the same idol WITHOUT a dress: the reference only lends the
+    # dress's shape and shading. Line the reference up with it by the eyes.
+    base = cv2.imread(BASE)
+    (rx1, ry1), (rx2, ry2) = c["align"]["ref_eyes"]
+    (bx1, by1), (bx2, by2) = c["align"]["base_eyes"]
+    k = math.hypot(bx2 - bx1, by2 - by1) / math.hypot(rx2 - rx1, ry2 - ry1)
+    rmx, rmy, bmx, bmy = (rx1 + rx2) / 2, (ry1 + ry2) / 2, (bx1 + bx2) / 2, (by1 + by2) / 2
+    M = np.float32([[k, 0, bmx - k * rmx], [0, k, bmy - k * rmy]])
+    ref = cv2.warpAffine(ref, M, (base.shape[1], base.shape[0]), borderMode=cv2.BORDER_REPLICATE)
+
+    def T(p):
+        return [p[0] * k + M[0, 2], p[1] * k + M[1, 2]]
+
+    sk = c["skirt"]
+    sk["waist_centre"], sk["hem_centre"] = T(sk["waist_centre"]), T(sk["hem_centre"])
+    sk["waist_radii"] = [v * k for v in sk["waist_radii"]]
+    sk["hem_radii"] = [v * k for v in sk["hem_radii"]]
+    c["bodice"]["quad"] = [T(p) for p in c["bodice"]["quad"]]
+    c["old_dress_outline"] = [T(p) for p in c["old_dress_outline"]]
+    c["keep_on_top"] = c["align"].get("base_keep_on_top") or [[T(p) for p in poly] for poly in c["keep_on_top"]]
 H, W = ref.shape[:2]
 dress = cv2.imread(DRESS)
 d = c["dress_photo"]
@@ -178,7 +204,9 @@ old = ((np.abs(ref.astype(int) - cloth).sum(axis=2) > c.get("cloth_tol", 45)) & 
 old = cv2.morphologyEx(old, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
 old = cv2.dilate(old, np.ones((5, 5), np.uint8))
 leftover = (old > 0) & (alpha < 0.5) & ~((in_quad > 0) & upper)
-plate = ref.copy()
+if base is not None:
+    leftover[:] = False          # the bare photo has no old dress to hide
+plate = (base if base is not None else ref).copy()
 if leftover.any():
     # fill the whole old dress area from the floor around it, then use that fill
     # only where the new dress doesn't cover
@@ -206,6 +234,6 @@ keep = np.zeros((H, W), np.uint8)
 for poly in c["keep_on_top"]:
     cv2.fillPoly(keep, [np.int32(poly)], 255)
 keep = cv2.GaussianBlur(keep.astype(np.float32) / 255, (5, 5), 0)[..., None]
-out = out * (1 - keep) + ref.astype(np.float32) * keep
+out = out * (1 - keep) + (base if base is not None else ref).astype(np.float32) * keep
 cv2.imwrite(OUT, np.clip(out, 0, 255).astype(np.uint8))
 print("saved", OUT)
