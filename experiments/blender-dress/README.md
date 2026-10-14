@@ -64,6 +64,7 @@ Not yet:
 
 For `run_all.sh`: `IDOL=idol_bare2.png SETUP=setup_idol2.json bash run_all.sh`
 
+- `setup_idol4.json` is for `idol_bare4.png` (higher camera, lots of floor, no necklace: **the best so far**). `IDOL=idol_bare4.png SETUP=setup_idol4.json bash run_all.sh`
 - `setup_idol3.json` is for `idol_bare3.png` (idol without the necklace: the cleanest neckline). `IDOL=idol_bare3.png SETUP=setup_idol3.json bash run_all.sh`
 
 ## Settings (`setup.json`)
