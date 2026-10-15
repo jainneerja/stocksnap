@@ -50,6 +50,9 @@ if BASE:
 H, W = ref.shape[:2]
 dress = cv2.imread(DRESS)
 d = c["dress_photo"]
+_side = DRESS.rsplit(".", 1)[0] + ".json"      # per-dress settings next to the photo
+if __import__("os").path.exists(_side):
+    d.update(json.load(open(_side)))
 
 # ---- dress photo: background -> alpha, centre and radius of the round skirt
 bg = np.median(np.concatenate([dress[:8].reshape(-1, 3), dress[-8:].reshape(-1, 3)]), axis=0)
@@ -243,7 +246,14 @@ if b.get("fit_rows", True):
         ok = ~np.isnan(L)
         L = np.interp(ys_, ys_[ok], L[ok]); R = np.interp(ys_, ys_[ok], R[ok])
         # smooth edges: the colour mask is ragged, a garment edge is not
-        from scipy.ndimage import median_filter, gaussian_filter1d
+        def median_filter(a, k):           # 1-D running median (numpy only)
+            pad = np.pad(a, k // 2, mode="edge")
+            return np.median(np.lib.stride_tricks.sliding_window_view(pad, k), axis=1)
+
+        def gaussian_filter1d(a, sig):     # 1-D gaussian blur (numpy only)
+            r = int(3 * sig)
+            g = np.exp(-0.5 * (np.arange(-r, r + 1) / sig) ** 2); g /= g.sum()
+            return np.convolve(np.pad(a, r, mode="edge"), g, mode="valid")
         L = gaussian_filter1d(median_filter(L, 41), 10); R = gaussian_filter1d(median_filter(R, 41), 10)
         smooth = np.zeros((H, W), bool)
         for i, y in enumerate(ys_):

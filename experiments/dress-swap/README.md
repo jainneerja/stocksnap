@@ -1,5 +1,59 @@
 # Experiment: swap the dress in a photo of a dressed idol
 
+## Run it yourself (Windows, Git Bash)
+
+You need the StockSnap backend set up once (its `.venv` has numpy and OpenCV).
+
+1. **Make the reference picture once** (per dress cut). In the free Gemini app, attach
+   (1) the bare idol photo, (2) an example of a dressed idol, (3) one real flat dress, and
+   use the prompt in "Making the AI reference" below. Save the result here as `ai_red.png`
+   (the one we used is already here).
+2. **Photograph each dress** flat, from straight above, whole dress in frame, on a
+   plain cloth, front opening closed. Put the photos in the `dresses/` folder.
+3. **Tell the script where the vest is in each photo.** Next to each photo add a small
+   `.json` file with the same name, e.g. `dresses/red_leaves_top.json`:
+   ```json
+   {"bodice_box": [418, 612, 972, 818], "fabric_by": "colour"}
+   ```
+   `bodice_box` = left, top, right, bottom of the straight part of the vest in the photo,
+   in pixels (open the photo in Paint: the pixel position shows at the bottom left).
+   `"fabric_by": "colour"` only for a busy background (patterned shelf); leave it out on
+   a plain cloth. If all dresses are photographed the same way, the numbers stay the same.
+4. **Run it:**
+   ```bash
+   cd /c/Projects/stocksnap/experiments/dress-swap
+   bash run_all.sh
+   ```
+   Results appear in `out/` (one picture per dress, ~3 seconds each).
+
+One dress by hand:
+```bash
+PY=../../backend/.venv/Scripts/python.exe
+$PY swap.py ai_red.png dresses/red_leaves_top.png out.png swap_ai_d2.json
+$PY add_necklace.py out.png ai_red.png out_final.png necklace_ai.json
+```
+
+**Always compare the result with the real dress before listing it.**
+
+### Making the AI reference (prompt)
+
+> I am giving you three images. Image 1: my idol without clothes (the base photo).
+> Image 2: an example of an idol wearing a dress (copy only how it is worn).
+> Image 3: the actual dress, laid flat. Create a new image of the idol from image 1
+> wearing the dress from image 3, worn the same way as in image 2. Keep everything in
+> image 1 the same: face, crown, earrings, hair, the ball in his hand, pose, camera,
+> background, light. Copy only how the dress sits from image 2: sleeveless vest covering
+> the shoulders, V neckline with gold trim, pearl necklace, round skirt spread flat in a
+> wide circle. Copy the dress design exactly from image 3. Photorealistic, no text.
+
+### If the reference picture changes
+
+`swap_ai_d2.json` describes the reference picture (`ai_red.png`): where its skirt's waist
+and hem are, the box round its vest and the outlines of the arms. A new reference picture
+needs these numbers set again (ask Claude, it takes a few minutes).
+
+---
+
 **Idea:** start from a photo where the idol is *already wearing* a dress of the same
 cut (here an AI-made reference in blue). That photo already has the right shape,
 folds, light and pose. Then:
