@@ -139,6 +139,19 @@ for j in order:
                 fade = min(max((rr - half_w) / 60.0, 0.0), 1.0)    # beyond the bodice: no squeeze
                 a_min *= (1 - fade)
                 ths = a_min + ths * (math.pi - 2 * a_min) / math.pi
+            if d.get("view") == "angled":
+                # dress photographed from the front at an angle: only the front half
+                # of the skirt is seen, as a band between a waist ellipse and a hem
+                # ellipse; the back half is the mirrored front (ths is already >= 0)
+                av = d["angled"]
+                f_ = av.get("start", 0.12) + (1.0 - av.get("start", 0.12)) * ii / NR
+                wc, wr = av["waist_centre"], av["waist_radii"]
+                hc, hr = av["hem_centre"], av["hem_radii"]
+                ex = wc[0] + (hc[0] - wc[0]) * f_ + (wr[0] + (hr[0] - wr[0]) * f_) * math.cos(ths)
+                ey = wc[1] + (hc[1] - wc[1]) * f_ + (wr[1] + (hr[1] - wr[1]) * f_) * math.sin(ths)
+                quad_src.append((ex, ey))
+                quad_dst.append(scene_pt(th, ii / NR))
+                continue
             quad_src.append((CX + rr * math.cos(ths), CY + rr * math.sin(ths)))
             quad_dst.append(scene_pt(th, ii / NR))
         warp_tri(dress_a, [quad_src[0], quad_src[1], quad_src[2]], [quad_dst[0], quad_dst[1], quad_dst[2]])
