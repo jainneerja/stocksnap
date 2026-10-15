@@ -244,7 +244,7 @@ if b.get("fit_rows", True):
         L = np.interp(ys_, ys_[ok], L[ok]); R = np.interp(ys_, ys_[ok], R[ok])
         # smooth edges: the colour mask is ragged, a garment edge is not
         from scipy.ndimage import median_filter, gaussian_filter1d
-        L = gaussian_filter1d(median_filter(L, 15), 4); R = gaussian_filter1d(median_filter(R, 15), 4)
+        L = gaussian_filter1d(median_filter(L, 41), 10); R = gaussian_filter1d(median_filter(R, 41), 10)
         smooth = np.zeros((H, W), bool)
         for i, y in enumerate(ys_):
             lft, rgt = int(round(L[i])), int(round(R[i]))
@@ -262,7 +262,20 @@ if b.get("fit_rows", True):
         for k_ in range(1, n_):
             if st_[k_, cv2.CC_STAT_AREA] > 300:
                 neck_hole |= lab_ == k_
+        if b.get("neck_bottom_y"):
+            # below the neckline the old top's gaps are its gold placket, not skin:
+            # the new top covers them
+            neck_hole[int(b["neck_bottom_y"]):] = False
         tm = np.where(in_quad > 0, (smooth & ~neck_hole).astype(np.float32), tm)
+        # let the top hang a few pixels lower than the old one, over the dark seam
+        # line the old top casts on the skirt
+        drop = b.get("hem_drop_px", 8)
+        hem = np.zeros_like(tm)
+        hem[drop:] = tm[:-drop]
+        tm = np.maximum(tm, hem)
+        mapx[drop:] = np.where(mapx[drop:] < 0, mapx[:-drop], mapx[drop:])
+        mapy[drop:] = np.where(mapy[drop:] < 0, mapy[:-drop], mapy[drop:])
+        in_quad = np.maximum(in_quad, np.vstack([np.zeros((drop, W), np.float32), in_quad[:-drop]]))
         tm = cv2.GaussianBlur(tm, (3, 3), 0)
         alpha = np.where((in_quad > 0) & (tm > 0.5), np.maximum(alpha, tm), alpha)
         fitted = cv2.remap(dress, mapx, mapy, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE).astype(np.float32)
@@ -332,9 +345,22 @@ if vn:
 
 # ---- shading from the old dress (soft, so its pattern doesn't show through)
 gray = cv2.cvtColor(ref, cv2.COLOR_BGR2GRAY).astype(np.float32)
-soft = cv2.GaussianBlur(gray, (0, 0), c.get("shade_blur", 18))
 inside = alpha > 0.5
-ref_level = np.median(soft[inside])
+ref_level = np.median(cv2.GaussianBlur(gray, (0, 0), 18)[inside])
+soft = cv2.GaussianBlur(gray, (0, 0), c.get("shade_blur", 18))
+if b.get("old_top_colour") == "red":
+    # the old top's gold trims are much brighter than its fabric: shading taken
+    # from them would paint ghost stripes on the new top. Use only the plain
+    # fabric's light, spread over the trims (normalised blur).
+    plain = ((rf[..., 2] > rf[..., 1] + 60) & (rf[..., 2] > rf[..., 0] + 40)).astype(np.float32)
+    sb = b.get("top_shade_blur", 6)
+    num = cv2.GaussianBlur(gray * plain, (0, 0), sb)
+    den = cv2.GaussianBlur(plain, (0, 0), sb)
+    top_soft = num / np.maximum(den, 1e-3)
+    top_level = np.median(top_soft[(tm > 0.5) & (den > 0.2)]) if ((tm > 0.5) & (den > 0.2)).any() else ref_level
+    top_soft = top_soft * (ref_level / max(top_level, 1)) * b.get("top_brightness", 1.0)
+    w_top = cv2.GaussianBlur(((tm > 0.5) & (in_quad > 0)).astype(np.float32), (0, 0), 3)
+    soft = soft * (1 - w_top) + top_soft * w_top
 shade = np.clip((soft / ref_level) ** c.get("shade_strength", 0.6), 0.55, 1.25)
 layer *= shade[..., None]
 

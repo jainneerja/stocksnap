@@ -51,7 +51,8 @@
   "old_top_colour": "red",
   "waistband_px": 20,
   "grow_px": 7,
-  "neck_share": 0.4
+  "neck_share": 0.4,
+  "neck_bottom_y": 455
  },
  "old_dress_outline": [
   [
