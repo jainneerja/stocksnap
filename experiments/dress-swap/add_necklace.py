@@ -30,6 +30,15 @@ if c.get("lies_on") == "blue":
     neck = ((~blue) & (area > 0)).astype(np.uint8) * 255
     neck = cv2.morphologyEx(neck, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
     neck = cv2.morphologyEx(neck, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8))
+elif c.get("lies_on") == "red":
+    f = src.astype(int)
+    red = (f[..., 2] > f[..., 1] + 60) & (f[..., 2] > f[..., 0] + 40)
+    gold_trim = np.zeros(src.shape[:2], bool)
+    for poly in c.get("not_necklace", []):        # e.g. the vest's gold trims
+        m_ = np.zeros(src.shape[:2], np.uint8); cv2.fillPoly(m_, [np.int32(poly)], 255); gold_trim |= m_ > 0
+    neck = ((~red) & ~gold_trim & (area > 0)).astype(np.uint8) * 255
+    neck = cv2.morphologyEx(neck, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+    neck = cv2.morphologyEx(neck, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8))
 else:
     neck = None
 hsv = cv2.cvtColor(src, cv2.COLOR_BGR2HSV).astype(int)

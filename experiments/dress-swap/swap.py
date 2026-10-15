@@ -114,11 +114,17 @@ for j in order:
             # skirt is round and symmetric, so the back half is taken from the
             # mirrored front half
             ths = th if math.sin(th) >= 0 else -th
-            if rr < s.get("bodice_cover_px", 340):
-                # near the waist the bodice also lies over the sides of the skirt
-                # in the flat photo: take the pattern from the front instead (the
-                # skirt's rings repeat all the way round)
-                ths = math.pi / 2 + (ths - math.pi / 2) * s.get("inner_spread", 0.62)
+            if s.get("dodge_bodice", True) and rr > 1:
+                # in the flat photo the bodice also lies over the skirt just below
+                # its sides: squeeze the angles into the uncovered part at the same
+                # radius (the skirt's rings repeat all the way round). A smooth
+                # squeeze, so no triangle collapses.
+                y_cut = d["bodice_box"][3] - CY + s.get("dodge_gap_px", 22)
+                half_w = (d["bodice_box"][2] - d["bodice_box"][0]) / 2 + 10
+                a_min = math.asin(min(1.0, y_cut / rr)) if rr > y_cut else math.pi / 2 - 0.05
+                fade = min(max((rr - half_w) / 60.0, 0.0), 1.0)    # beyond the bodice: no squeeze
+                a_min *= (1 - fade)
+                ths = a_min + ths * (math.pi - 2 * a_min) / math.pi
             quad_src.append((CX + rr * math.cos(ths), CY + rr * math.sin(ths)))
             quad_dst.append(scene_pt(th, ii / NR))
         warp_tri(dress_a, [quad_src[0], quad_src[1], quad_src[2]], [quad_dst[0], quad_dst[1], quad_dst[2]])
@@ -161,7 +167,12 @@ cv2.fillPoly(vq, [np.int32(b["quad"])], 255)
 lo, hi = b.get("old_top_hue", [100, 135])        # OpenCV hue 0-180; blue ~ 100-130
 rf = ref.astype(int)
 bluish = (rf[..., 0] > rf[..., 2] + 25) & (rf[..., 0] > rf[..., 1] + 10)   # also dark/shadowed blue
-top_px = (((hsv[..., 0] >= lo) & (hsv[..., 0] <= hi) & (hsv[..., 1] > 90)) | bluish).astype(np.uint8) * 255
+if b.get("old_top_colour") == "red":
+    # red top: red fabric plus its gold trims count as the top (inside the box)
+    reddish = (rf[..., 2] > rf[..., 1] + 60) & (rf[..., 2] > rf[..., 0] + 40)
+    top_px = reddish.astype(np.uint8) * 255
+else:
+    top_px = (((hsv[..., 0] >= lo) & (hsv[..., 0] <= hi) & (hsv[..., 1] > 90)) | bluish).astype(np.uint8) * 255
 top_px = cv2.bitwise_and(top_px, vq)
 top_px = cv2.morphologyEx(top_px, cv2.MORPH_CLOSE, np.ones((15, 15), np.uint8))
 cnts, _ = cv2.findContours(top_px, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)

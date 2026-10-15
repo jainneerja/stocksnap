@@ -29,6 +29,22 @@ python swap.py ref_blue.png dress.jpg out.png swap.json
 (needs `opencv-python` and `numpy`, already installed with StockSnap's backend).
 For many dresses: loop over the dress photos with the same reference and settings.
 
+## Best: an AI picture of your own idol as the reference
+
+1. Once per dress style, make one picture with a free AI app (Gemini): attach the bare
+   idol, an example of a dressed idol and one real flat dress, and ask it to dress the idol.
+   (`ai_red.png` was made this way.)
+2. Then every dress of that cut goes into that picture with its exact embroidery:
+
+```bash
+python swap.py ai_red.png my_dress.jpg out.png swap_ai.json
+python add_necklace.py out.png ai_red.png out_final.png necklace_ai.json
+```
+
+`swap_ai.json` is set once for that AI picture (skirt, vest box, arms). The vest is
+found by its red colour (`"old_top_colour": "red"`); the necklace is lifted back out of
+the AI picture (everything in its outline that isn't the red vest).
+
 ## On a bare-idol photo
 
 Give a photo of the idol **without** a dress (and without a necklace) as the last
