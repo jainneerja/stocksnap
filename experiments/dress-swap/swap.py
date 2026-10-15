@@ -53,8 +53,22 @@ d = c["dress_photo"]
 
 # ---- dress photo: background -> alpha, centre and radius of the round skirt
 bg = np.median(np.concatenate([dress[:8].reshape(-1, 3), dress[-8:].reshape(-1, 3)]), axis=0)
-fab = (np.abs(dress.astype(int) - bg).sum(axis=2) > 60).astype(np.uint8) * 255
-fab = cv2.morphologyEx(fab, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
+if d.get("fabric_by") == "colour":
+    # busy / patterned background (e.g. a dark tiled shelf): the dress is the big,
+    # strongly coloured shape; grey or dark background is left out
+    hsv_ = cv2.cvtColor(dress, cv2.COLOR_BGR2HSV)
+    bright = (hsv_[..., 1] > d.get("min_sat", 120)) & (hsv_[..., 2] > d.get("min_val", 140))
+    fab = bright.astype(np.uint8) * 255
+    fab = cv2.morphologyEx(fab, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
+    fab = cv2.morphologyEx(fab, cv2.MORPH_CLOSE, np.ones((21, 21), np.uint8))
+    n_, lab_, st_, _ = cv2.connectedComponentsWithStats(fab)
+    if n_ > 1:
+        fab = (lab_ == 1 + np.argmax(st_[1:, cv2.CC_STAT_AREA])).astype(np.uint8) * 255
+    cnts_, _ = cv2.findContours(fab, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    cv2.drawContours(fab, cnts_, -1, 255, -1)        # fill holes (sequins, gold)
+else:
+    fab = (np.abs(dress.astype(int) - bg).sum(axis=2) > 60).astype(np.uint8) * 255
+    fab = cv2.morphologyEx(fab, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
 fab = cv2.erode(fab, np.ones((3, 3), np.uint8))
 ys, xs = np.nonzero(fab)
 CX, CY = d.get("centre") or (xs.mean(), ys.mean())
