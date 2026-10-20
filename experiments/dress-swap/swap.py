@@ -131,6 +131,12 @@ for j in order:
             # skirt is round and symmetric, so the back half is taken from the
             # mirrored front half
             ths = th if math.sin(th) >= 0 else -th
+            if s.get("back_fold") and math.sin(th) < 0:
+                # back half: fold the pattern so the front centre (often a gold
+                # placket) is not repeated at the back; the seam is at the back
+                # centre, behind the idol
+                k_ = s["back_fold"]
+                ths = math.pi - (th - math.pi) * k_ if th < 1.5 * math.pi else (2 * math.pi - th) * k_
             if s.get("dodge_bodice", True) and rr > 1:
                 # in the flat photo the bodice also lies over the skirt just below
                 # its sides: squeeze the angles into the uncovered part at the same
@@ -423,6 +429,11 @@ if base is not None and c.get("keep_trim_cloth", True):
     keep[is_cloth > 0] = 0
     keep = cv2.morphologyEx(keep, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
 keep[strap_mask > 0] = 0
+if c.get("keep_drop_blue"):
+    # outlines drawn round the idol may catch bits of the old (blue) dress: drop them
+    rb = ref.astype(int)
+    blu = ((rb[..., 0] > rb[..., 2] + 25) & (rb[..., 0] > rb[..., 1] + 10)).astype(np.uint8)
+    keep[cv2.dilate(blu, np.ones((3, 3), np.uint8)) > 0] = 0
 # a soft contact shadow round what stays on top (hands resting on the dress)
 ring = cv2.GaussianBlur(keep.astype(np.float32) / 255, (0, 0), c.get("contact_shadow_px", 6))
 ring = np.clip(ring - keep.astype(np.float32) / 255, 0, 1)
