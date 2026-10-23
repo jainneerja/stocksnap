@@ -80,6 +80,11 @@ download a **PDF catalogue**: a cover page with your logo, then 4 big or 9 small
 cards per page. Optionally the products are cut out onto a clean white background.
 Your photos are not moved or changed; the app keeps its own copy.
 
+**Folders for sizes, designs and colours.** Sort the photos like
+`Lehenga Patka/Size 7/Design 2/Light Pink.jpg` and the catalogue groups them: one block
+per design and size, with every colour's photo labelled underneath ("By design" layout).
+Folders starting with `_` are skipped.
+
 ## Tell the AI what you sell
 
 A small vision model only sees shapes and colours, so it can call a round embroidered outfit a "hat". You can tell it what your items really are, in your own words, in three places:

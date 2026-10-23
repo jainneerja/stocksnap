@@ -64,3 +64,21 @@ def test_name_from_file():
     assert name_from_file("blue_pearl-set (2).jpg") == "Blue pearl set"
     for camera in ("IMG_2041.jpg", "WhatsApp Image 2026-10-01 at 10.jpeg", "PXL_20261001.jpg", "1234.png"):
         assert name_from_file(camera) == "", camera
+
+
+def test_folders_give_size_design_colour(client):
+    paths = ["Lehenga/Size 6/Design 1/Blue.jpg", "Lehenga/Size 6/Design 1/Red.jpg",
+             "Lehenga/Size 7/Design 2/Light Pink.jpg", "Lehenga/_preview/sheet.jpg"]
+    files = _files("Blue.jpg", "Red.jpg", "Light Pink.jpg", "sheet.jpg")
+    r = client.post("/api/catalogues", files=files,
+                    data={"paths": paths, "hint": "Lehenga patka", "title": "Mata Rani"})
+    assert r.status_code == 201, r.text
+    c = client.get(f"/api/catalogues/{r.json()['id']}").json()
+    assert c["layout"] == "designs" and c["total"] == 3            # _preview folder skipped
+    first = c["items"][0]
+    assert (first["size"], first["design"], first["colour"]) == ("6", "Design 1", "Blue")
+    assert first["name"] == "Lehenga patka Design 1 Blue (size 6)"
+    assert c["items"][2]["colour"] == "Light Pink"
+    client.put(f"/api/catalogues/{c['id']}", json={"items": [{"id": first["id"], "price": "₹350"}]})
+    pdf = client.get(f"/api/catalogues/{c['id']}/pdf")
+    assert pdf.content[:4] == b"%PDF"

@@ -557,6 +557,9 @@ export interface CatalogueItem {
   code: string;
   include: boolean;
   status: "queued" | "ready" | "failed";
+  size?: string;
+  design?: string;
+  colour?: string;
 }
 
 export interface Catalogue {
@@ -565,6 +568,8 @@ export interface Catalogue {
   title: string;
   subtitle: string;
   columns: 2 | 3;
+  layout: "grid" | "designs";
+  product: string;
   hint: string;
   status: "running" | "done";
   done: number;
@@ -583,15 +588,19 @@ export interface CatalogueSummary {
   cover: string | null;
 }
 
-export type CatalogueEdit = Partial<Pick<Catalogue, "title" | "subtitle" | "columns">> & {
-  items?: (Partial<Pick<CatalogueItem, "name" | "description" | "price" | "code" | "include">> & { id: number })[];
+export type CatalogueEdit = Partial<Pick<Catalogue, "title" | "subtitle" | "columns" | "layout" | "product">> & {
+  items?: (Partial<Pick<CatalogueItem, "name" | "description" | "price" | "code" | "include" | "colour">> & { id: number })[];
 };
 
 export const catalogues = {
   list: () => req<CatalogueSummary[]>("/api/catalogues"),
   create: (files: File[], opts: { title: string; hint: string; clean_background: boolean; describe: boolean }) => {
     const fd = new FormData();
-    for (const f of files) fd.append("files", f, f.name);
+    for (const f of files) {
+      fd.append("files", f, f.name);
+      // where the photo sits in the picked folder: "Size 7/Design 2/Red.jpg"
+      fd.append("paths", (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name);
+    }
     fd.append("title", opts.title);
     fd.append("hint", opts.hint);
     fd.append("clean_background", String(opts.clean_background));

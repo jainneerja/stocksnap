@@ -43,6 +43,29 @@ def name_from_file(filename: str) -> str:
     return (words[:1].upper() + words[1:])[:80]
 
 
+SIZE_DIR = re.compile(r"^(?:size|sz)[\s_-]*([0-9]+(?:\s*[-–to]+\s*[0-9]+)?|[a-z]{1,4})$", re.I)
+DESIGN_DIR = re.compile(r"^(?:design|style|model|d)[\s_-]*(\w+)$", re.I)
+
+
+def parse_path(rel_path: str) -> dict:
+    """Folders say what the photo is: '.../Size 7/Design 2/Light Pink.jpg' ->
+    {size: '7', design: 'Design 2', colour: 'Light pink'}. Unknown folders are ignored."""
+    parts = [p for p in re.split(r"[\\/]", rel_path or "") if p]
+    out = {"size": "", "design": "", "colour": ""}
+    for part in parts[:-1]:
+        name = part.strip()
+        m = SIZE_DIR.match(name)
+        if m:
+            out["size"] = m.group(1).replace(" ", "")
+            continue
+        m = DESIGN_DIR.match(name)
+        if m:
+            out["design"] = f"Design {m.group(1)}"
+    if out["size"] or out["design"]:
+        out["colour"] = name_from_file(parts[-1] if parts else "")
+    return out
+
+
 def _wrap(draw: ImageDraw.ImageDraw, text: str, font, width: int, max_lines: int) -> list[str]:
     words, lines, cur = (text or "").split(), [], ""
     for w in words:
@@ -143,6 +166,86 @@ def _card(item: dict, photo: Image.Image, w: int, h: int) -> Image.Image:
     return card
 
 
+def _groups(items: list[dict]) -> list[tuple[str, list[dict]]]:
+    """Products by design (and size), in folder order."""
+    order: list[str] = []
+    by: dict[str, list[dict]] = {}
+    for it in items:
+        key = " · ".join(x for x in (it.get("design") or "", f"Size {it['size']}" if it.get("size") else "") if x) \
+            or it.get("name") or "Products"
+        if key not in by:
+            order.append(key)
+            by[key] = []
+        by[key].append(it)
+    return [(k, by[k]) for k in order]
+
+
+def _design_pages(cat: dict, items: list[dict], photo, shop: str) -> list[Image.Image]:
+    """One block per design: heading (design, size, colours, price), then the colour photos."""
+    cols = 3 if cat.get("columns") == 3 else 2
+    gap = 24
+    cw = (PAGE_W - 2 * MARGIN - (cols - 1) * gap) // cols
+    ph = cw
+    cap = 50
+    top, bottom = MARGIN + 70, PAGE_H - 110
+    product = (cat.get("product") or "").strip()
+    pages: list[Image.Image] = []
+    page = d = None
+    y = 0
+
+    def new_page():
+        nonlocal page, d, y
+        page = Image.new("RGB", (PAGE_W, PAGE_H), "white")
+        d = ImageDraw.Draw(page)
+        d.text((MARGIN, MARGIN), cat.get("title") or shop, font=_font(30, True), fill=INK)
+        pages.append(page)
+        y = top
+
+    new_page()
+    fh, fs, fc, fp = _font(36, True), _font(24), _font(24, True), _font(30, True)
+    for key, group in _groups(items):
+        head_h = 118
+        # cell height follows the photos' shape: wide photos get shorter cells
+        ratios = sorted(photo(it).height / max(photo(it).width, 1) for it in group)
+        ph = int(cw * min(max(ratios[len(ratios) // 2], 0.55), 1.25))
+        rows_n = -(-len(group) // cols)
+        whole = head_h + rows_n * (ph + cap + 10)
+        if y + whole > bottom and y > top and whole <= bottom - top:
+            new_page()   # keep a design on one page when it fits on one
+        if y + head_h + ph + cap > bottom and y > top:
+            new_page()
+        first = group[0]
+        title = " – ".join(x for x in (product, first.get("design") or first.get("name") or key) if x)
+        if first.get("size"):
+            title += f" · Size {first['size']}"
+        d.rectangle((MARGIN, y, PAGE_W - MARGIN, y + head_h - 18), fill=CARD_BG)
+        d.text((MARGIN + 20, y + 14), title, font=fh, fill=INK)
+        colours = [it.get("colour") or it.get("name") for it in group]
+        info = f"{len(group)} colour{'s' if len(group) != 1 else ''}: " + ", ".join(c for c in colours if c)
+        d.text((MARGIN + 20, y + 62), info, font=fs, fill=MUTED)
+        prices = list(dict.fromkeys(it.get("price", "").strip() for it in group if it.get("price", "").strip()))
+        if prices:
+            pt = " / ".join(prices[:3])
+            d.text((PAGE_W - MARGIN - 20 - d.textlength(pt, font=fp), y + 30), pt, font=fp, fill=ACCENT)
+        y += head_h
+        for k, it in enumerate(group):
+            c = k % cols
+            if c == 0 and k:
+                y += ph + cap + 10
+            if c == 0 and y + ph + cap > bottom:
+                new_page()
+            x = MARGIN + c * (cw + gap)
+            page.paste(_fit(photo(it), cw, ph), (x, y))
+            d.rectangle((x, y, x + cw - 1, y + ph - 1), outline=(228, 219, 206), width=2)
+            label = colours[k] or ""
+            code = (it.get("code") or "").strip()
+            d.text((x + 4, y + ph + 10), label, font=fc, fill=INK)
+            if code:
+                d.text((x + cw - 4 - d.textlength(code, font=fs), y + ph + 10), code, font=fs, fill=MUTED)
+        y += ph + cap + 34
+    return pages
+
+
 def build_pdf(cat: dict, photo_dir: Path, shop: str, logo_path: Optional[Path] = None) -> bytes:
     """cat: {title, subtitle, columns, items:[{photo, name, price, code, description, include}]}"""
     items = [it for it in cat["items"] if it.get("include", True) and it.get("status") != "failed"]
@@ -163,22 +266,35 @@ def build_pdf(cat: dict, photo_dir: Path, shop: str, logo_path: Optional[Path] =
             logo = Image.open(logo_path)
         except OSError:
             logo = None
-    n_pages = 1 + max(1, -(-len(items) // per_page))
-    pages = [_cover(shop, cat.get("title") or "Catalogue", cat.get("subtitle") or "", len(items), logo,
-                    photo(items[0]) if items else None)]
-    ImageDraw.Draw(pages[0])
-    _footer(ImageDraw.Draw(pages[0]), shop, 1, n_pages)
-    chunks = [items[i:i + per_page] for i in range(0, len(items), per_page)] or [[]]
-    fh = _font(30, True)
-    for p, chunk in enumerate(chunks, start=2):
-        page = Image.new("RGB", (PAGE_W, PAGE_H), "white")
-        d = ImageDraw.Draw(page)
-        d.text((MARGIN, MARGIN), cat.get("title") or shop, font=fh, fill=INK)
-        for k, it in enumerate(chunk):
-            r, c = divmod(k, cols)
-            page.paste(_card(it, photo(it), cw, ch), (MARGIN + c * (cw + gap), top + r * (ch + gap)))
-        _footer(d, shop, p, n_pages)
-        pages.append(page)
+    designs = cat.get("layout") == "designs"
+    cover = _cover(shop, cat.get("title") or "Catalogue", cat.get("subtitle") or "", len(items), logo,
+                   photo(items[0]) if items else None)
+    if designs:
+        n_designs = len(_groups(items))
+        body = _design_pages(cat, items, photo, shop)
+    else:
+        n_designs = 0
+        body = []
+        chunks = [items[i:i + per_page] for i in range(0, len(items), per_page)] or [[]]
+        fh = _font(30, True)
+        for chunk in chunks:
+            page = Image.new("RGB", (PAGE_W, PAGE_H), "white")
+            d = ImageDraw.Draw(page)
+            d.text((MARGIN, MARGIN), cat.get("title") or shop, font=fh, fill=INK)
+            for k, it in enumerate(chunk):
+                r, c = divmod(k, cols)
+                page.paste(_card(it, photo(it), cw, ch), (MARGIN + c * (cw + gap), top + r * (ch + gap)))
+            body.append(page)
+    pages = [cover, *body]
+    if n_designs:
+        # the cover counts designs, not photos
+        cd = ImageDraw.Draw(cover)
+        f = _font(28)
+        cd.rectangle((0, PAGE_H - 210, PAGE_W, PAGE_H - 160), fill=(252, 249, 244))
+        meta = f"{n_designs} design{'s' if n_designs != 1 else ''} · {len(items)} colours · {time.strftime('%d %B %Y')}"
+        cd.text(((PAGE_W - cd.textlength(meta, font=f)) / 2, PAGE_H - 200), meta, font=f, fill=MUTED)
+    for i, pg in enumerate(pages, start=1):
+        _footer(ImageDraw.Draw(pg), shop, i, len(pages))
     buf = io.BytesIO()
     pages[0].save(buf, "PDF", resolution=150.0, save_all=True, append_images=pages[1:])
     return buf.getvalue()
