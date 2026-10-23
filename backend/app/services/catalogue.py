@@ -97,46 +97,115 @@ def _fit(img: Image.Image, w: int, h: int, bg=PHOTO_BG) -> Image.Image:
     return canvas
 
 
-def _footer(d: ImageDraw.ImageDraw, shop: str, page: int, total: int) -> None:
-    f = _font(22)
-    d.line((MARGIN, PAGE_H - 80, PAGE_W - MARGIN, PAGE_H - 80), fill=(220, 210, 198), width=2)
-    d.text((MARGIN, PAGE_H - 62), shop, font=f, fill=MUTED)
+# ---- festive look: cream paper, maroon and gold, serif headings
+CREAM = (253, 248, 238)
+MAROON = (112, 22, 38)
+MAROON_DARK = (78, 12, 26)
+GOLD = (191, 145, 58)
+GOLD_LIGHT = (232, 205, 140)
+
+
+def _serif(size: int, bold: bool = True, italic: bool = False):
+    names = (["DejaVuSerif-BoldItalic.ttf", "georgiaz.ttf", "Georgia Bold Italic.ttf"] if bold and italic else
+             ["DejaVuSerif-Italic.ttf", "georgiai.ttf", "Georgia Italic.ttf"] if italic else
+             ["DejaVuSerif-Bold.ttf", "georgiab.ttf", "Georgia Bold.ttf", "timesbd.ttf"] if bold else
+             ["DejaVuSerif.ttf", "georgia.ttf", "Georgia.ttf", "times.ttf"])
+    from PIL import ImageFont
+
+    for n in names:
+        for p in (n, f"/usr/share/fonts/truetype/dejavu/{n}", f"C:/Windows/Fonts/{n}", f"/Library/Fonts/{n}"):
+            try:
+                return ImageFont.truetype(p, size)
+            except OSError:
+                continue
+    return _font(size, bold)
+
+
+def _centre(d, y, text, font, fill):
+    d.text(((PAGE_W - d.textlength(text, font=font)) / 2, y), text, font=font, fill=fill)
+
+
+def _ornament(d, cx: int, y: int, half: int = 160, colour=GOLD) -> None:
+    """—— ◆ —— divider."""
+    d.line((cx - half, y, cx - 18, y), fill=colour, width=3)
+    d.line((cx + 18, y, cx + half, y), fill=colour, width=3)
+    d.polygon([(cx, y - 10), (cx + 10, y), (cx, y + 10), (cx - 10, y)], fill=colour)
+    for k in (-1, 1):
+        x = cx + k * (half + 10)
+        d.ellipse((x - 4, y - 4, x + 4, y + 4), fill=colour)
+
+
+def _frame(d) -> None:
+    """Thin double gold border round the page, with small corner diamonds."""
+    for inset, w in ((28, 4), (40, 2)):
+        d.rectangle((inset, inset, PAGE_W - inset, PAGE_H - inset), outline=GOLD, width=w)
+    for x, y in ((34, 34), (PAGE_W - 34, 34), (34, PAGE_H - 34), (PAGE_W - 34, PAGE_H - 34)):
+        d.polygon([(x, y - 12), (x + 12, y), (x, y + 12), (x - 12, y)], fill=GOLD)
+
+
+def _shadowed(page: Image.Image, img: Image.Image, x: int, y: int, radius: int = 18, border=GOLD) -> None:
+    """Photo with rounded corners, a soft shadow and a thin gold edge."""
+    from PIL import ImageFilter
+
+    w, h = img.size
+    sh = Image.new("L", (w + 60, h + 60), 0)
+    ImageDraw.Draw(sh).rounded_rectangle((30, 36, 30 + w, 36 + h), radius, fill=110)
+    sh = sh.filter(ImageFilter.GaussianBlur(12))
+    page.paste((90, 60, 40), (x - 30, y - 30), sh)
+    mask = Image.new("L", (w, h), 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, w - 1, h - 1), radius, fill=255)
+    page.paste(img, (x, y), mask)
+    ImageDraw.Draw(page).rounded_rectangle((x, y, x + w - 1, y + h - 1), radius, outline=border, width=3)
+
+
+def _footer(d: ImageDraw.ImageDraw, shop: str, page: int, total: int, contact: str = "") -> None:
+    f = _serif(22, bold=False, italic=True)
+    y = PAGE_H - 92
+    left = shop + (f"  ·  {contact}" if contact else "")
+    d.text((70, y), left, font=f, fill=MAROON)
     t = f"{page} / {total}"
-    d.text((PAGE_W - MARGIN - d.textlength(t, font=f), PAGE_H - 62), t, font=f, fill=MUTED)
+    d.text((PAGE_W - 70 - d.textlength(t, font=f), y), t, font=f, fill=MAROON)
 
 
 def _cover(shop: str, title: str, subtitle: str, count: int, logo: Optional[Image.Image],
            first: Optional[Image.Image], owner: str = "") -> Image.Image:
-    page = Image.new("RGB", (PAGE_W, PAGE_H), (252, 249, 244))
+    page = Image.new("RGB", (PAGE_W, PAGE_H), CREAM)
     d = ImageDraw.Draw(page)
-    y = 170
+    # maroon band at the top with the shop name in gold
+    band = 330 if not logo else 400
+    d.rectangle((0, 0, PAGE_W, band), fill=MAROON)
+    d.rectangle((0, band, PAGE_W, band + 8), fill=GOLD)
+    y = 70
     if logo is not None:
-        lg = ImageOps.contain(logo.convert("RGBA"), (260, 260))
-        page.paste(lg, ((PAGE_W - lg.width) // 2, y), lg)
-        y += lg.height + 50
-    lines = [(shop, 64, True, INK, 30 if not owner else 6)]
+        lg = ImageOps.contain(logo.convert("RGBA"), (130, 130))
+        page.paste(lg, ((PAGE_W - lg.width) // 2, y - 20), lg)
+        y += 120
+    f = _serif(80)
+    for line in _wrap(d, shop, f, PAGE_W - 200, 2):
+        _centre(d, y, line, f, GOLD_LIGHT)
+        y += 92
     if owner:
-        lines.append((owner, 32, False, MUTED, 30))
-    lines.append((title, 46, False, ACCENT, 24))
-    for text, size, bold, colour, gap in lines:
-        f = _font(size, bold)
-        for line in _wrap(d, text, f, PAGE_W - 2 * MARGIN, 2):
-            d.text(((PAGE_W - d.textlength(line, font=f)) / 2, y), line, font=f, fill=colour)
-            y += size + 14
-        y += gap
+        _centre(d, y + 6, owner, _serif(32, bold=False, italic=True), (240, 220, 200))
+    _ornament(d, PAGE_W // 2, band - 46, 200, GOLD_LIGHT)
+    # product title
+    y = band + 70
+    ft = _serif(66)
+    for line in _wrap(d, title, ft, PAGE_W - 200, 2):
+        _centre(d, y, line, ft, MAROON)
+        y += 78
     if subtitle:
-        f = _font(30)
-        for line in _wrap(d, subtitle, f, PAGE_W - 2 * MARGIN, 3):
-            d.text(((PAGE_W - d.textlength(line, font=f)) / 2, y), line, font=f, fill=MUTED)
-            y += 44
+        fs = _serif(30, bold=False, italic=True)
+        for line in _wrap(d, subtitle, fs, PAGE_W - 240, 2):
+            _centre(d, y + 6, line, fs, MAROON_DARK)
+            y += 42
+    _ornament(d, PAGE_W // 2, y + 34)
+    # the front photo, framed
     if first is not None:
-        size = min(PAGE_W - 2 * MARGIN - 200, PAGE_H - y - 330)
-        if size > 300:
-            ph = _fit(first, size, size, (252, 249, 244))
-            page.paste(ph, ((PAGE_W - size) // 2, y + 60))
-    f = _font(28)
-    meta = f"{count} product{'s' if count != 1 else ''} · {time.strftime('%d %B %Y')}"
-    d.text(((PAGE_W - d.textlength(meta, font=f)) / 2, PAGE_H - 200), meta, font=f, fill=MUTED)
+        top = y + 90
+        box_w, box_h = PAGE_W - 300, PAGE_H - top - 160
+        im = ImageOps.contain(first.convert("RGB"), (box_w, box_h), Image.LANCZOS)
+        _shadowed(page, im, (PAGE_W - im.width) // 2, top + (box_h - im.height) // 2)
+    _frame(d)
     return page
 
 
@@ -184,14 +253,39 @@ def _groups(items: list[dict]) -> list[tuple[str, list[dict]]]:
     return [(k, by[k]) for k in order]
 
 
+NAMED = {"red": (200, 30, 40), "maroon": (120, 20, 40), "pink": (230, 80, 150), "dark pink": (200, 30, 110),
+         "light pink": (245, 170, 200), "rani pink": (215, 30, 120), "magenta": (200, 30, 160),
+         "orange": (245, 120, 30), "yellow": (245, 205, 40), "mustard": (210, 165, 40), "gold": (205, 160, 60),
+         "golden": (205, 160, 60), "green": (40, 160, 80), "dark green": (20, 100, 50), "light green": (140, 210, 120),
+         "parrot green": (110, 200, 40), "mehendi": (120, 130, 40), "blue": (40, 80, 200), "dark blue": (20, 40, 120),
+         "navy": (20, 30, 90), "light blue": (130, 180, 235), "sky blue": (120, 190, 240), "royal blue": (40, 60, 190),
+         "purple": (120, 50, 170), "violet": (130, 60, 190), "lavender": (180, 160, 220), "peach": (250, 180, 140),
+         "cream": (245, 235, 205), "white": (250, 250, 250), "silver": (200, 200, 205), "black": (25, 25, 25),
+         "brown": (120, 75, 40), "wine": (110, 20, 50), "teal": (20, 130, 130), "turquoise": (40, 190, 190),
+         "firozi": (40, 190, 190), "rust": (180, 80, 40), "beige": (220, 200, 165)}
+
+
+def _swatch(img: Image.Image, label: str = "") -> tuple:
+    """Dot colour: the colour named in the label ("Dark Pink"), else read from the photo."""
+    low = label.lower().replace("(on idol)", "").strip()
+    for name in sorted(NAMED, key=len, reverse=True):
+        if re.search(rf"\b{re.escape(name)}\b", low):
+            return NAMED[name]
+    sm = img.convert("RGB").resize((60, 60))
+    px = [p for p in sm.crop((12, 12, 48, 48)).getdata()]
+    strong = [p for p in px if max(p) - min(p) > 50] or px
+    strong.sort(key=lambda p: sum(p))
+    return strong[len(strong) // 2]
+
+
 def _design_pages(cat: dict, items: list[dict], photo, shop: str) -> list[Image.Image]:
-    """One block per design: heading (design, size, colours, price), then the colour photos."""
+    """One block per design: heading (design, size, price), then every colour as a framed card."""
     cols = 3 if cat.get("columns") == 3 else 2
-    gap = 24
-    cw = (PAGE_W - 2 * MARGIN - (cols - 1) * gap) // cols
-    ph = cw
-    cap = 50
-    top, bottom = MARGIN + 70, PAGE_H - 110
+    gap = 30
+    side = 90
+    cw = (PAGE_W - 2 * side - (cols - 1) * gap) // cols
+    cap = 66
+    top, bottom = 190, PAGE_H - 120
     product = (cat.get("product") or "").strip()
     pages: list[Image.Image] = []
     page = d = None
@@ -199,54 +293,69 @@ def _design_pages(cat: dict, items: list[dict], photo, shop: str) -> list[Image.
 
     def new_page():
         nonlocal page, d, y
-        page = Image.new("RGB", (PAGE_W, PAGE_H), "white")
+        page = Image.new("RGB", (PAGE_W, PAGE_H), CREAM)
         d = ImageDraw.Draw(page)
-        d.text((MARGIN, MARGIN), cat.get("title") or shop, font=_font(30, True), fill=INK)
+        d.rectangle((0, 0, PAGE_W, 120), fill=MAROON)
+        d.rectangle((0, 120, PAGE_W, 126), fill=GOLD)
+        f = _serif(40)
+        _centre(d, 38, cat.get("title") or shop, f, GOLD_LIGHT)
         pages.append(page)
         y = top
 
     new_page()
-    fh, fs, fc, fp = _font(36, True), _font(24), _font(24, True), _font(30, True)
+    fh, fsize, fc, fcode, fp = _serif(42), _font(24, True), _serif(25), _font(20), _font(30, True)
     for key, group in _groups(items):
-        head_h = 118
-        # cell height follows the photos' shape: wide photos get shorter cells
+        head_h = 100
         ratios = sorted(photo(it).height / max(photo(it).width, 1) for it in group)
-        ph = int(cw * min(max(ratios[len(ratios) // 2], 0.55), 1.25))
+        ph = int(cw * min(max(ratios[len(ratios) // 2], 0.55), 1.2))
         rows_n = -(-len(group) // cols)
-        whole = head_h + rows_n * (ph + cap + 10)
+        whole = head_h + rows_n * (ph + cap + 24)
         if y + whole > bottom and y > top and whole <= bottom - top:
             new_page()   # keep a design on one page when it fits on one
         if y + head_h + ph + cap > bottom and y > top:
             new_page()
         first = group[0]
-        title = " – ".join(x for x in (product, first.get("design") or first.get("name") or key) if x)
+        name = first.get("design") or first.get("name") or key
+        # heading: "Design 1" in maroon serif, a size pill, the price on a gold tag
+        d.text((side, y), name, font=fh, fill=MAROON)
+        x = side + d.textlength(name, font=fh) + 22
         if first.get("size"):
-            title += f" · Size {first['size']}"
-        d.rectangle((MARGIN, y, PAGE_W - MARGIN, y + head_h - 18), fill=CARD_BG)
-        d.text((MARGIN + 20, y + 14), title, font=fh, fill=INK)
-        colours = [it.get("colour") or it.get("name") for it in group]
-        info = f"{len(group)} colour{'s' if len(group) != 1 else ''}: " + ", ".join(c for c in colours if c)
-        d.text((MARGIN + 20, y + 62), info, font=fs, fill=MUTED)
+            t = f"Size {first['size']}"
+            tw = d.textlength(t, font=fsize)
+            d.rounded_rectangle((x, y + 8, x + tw + 32, y + 48), 20, outline=MAROON, width=2)
+            d.text((x + 16, y + 14), t, font=fsize, fill=MAROON)
         prices = list(dict.fromkeys(it.get("price", "").strip() for it in group if it.get("price", "").strip()))
         if prices:
             pt = " / ".join(prices[:3])
-            d.text((PAGE_W - MARGIN - 20 - d.textlength(pt, font=fp), y + 30), pt, font=fp, fill=ACCENT)
+            tw = d.textlength(pt, font=fp)
+            x1 = PAGE_W - side
+            d.rounded_rectangle((x1 - tw - 44, y, x1, y + 54), 27, fill=GOLD)
+            d.text((x1 - tw - 22, y + 9), pt, font=fp, fill=(255, 255, 255))
+        if product:
+            d.text((side, y + 54), f"{product} · {len(group)} colour{'s' if len(group) != 1 else ''}",
+                   font=_serif(22, bold=False, italic=True), fill=MUTED)
         y += head_h
         for k, it in enumerate(group):
             c = k % cols
             if c == 0 and k:
-                y += ph + cap + 10
+                y += ph + cap + 24
             if c == 0 and y + ph + cap > bottom:
                 new_page()
-            x = MARGIN + c * (cw + gap)
-            page.paste(_fit(photo(it), cw, ph), (x, y))
-            d.rectangle((x, y, x + cw - 1, y + ph - 1), outline=(228, 219, 206), width=2)
-            label = colours[k] or ""
+            x = side + c * (cw + gap)
+            # white card: photo + colour name with a colour dot
+            d.rounded_rectangle((x - 8, y - 8, x + cw + 8, y + ph + cap), 20, fill=(255, 255, 255),
+                                outline=GOLD_LIGHT, width=2)
+            img = photo(it)
+            _shadowed(page, _fit(img, cw - 16, ph - 16, (250, 246, 238)), x, y, 14, GOLD_LIGHT)
+            label = (it.get("colour") or it.get("name") or "").strip()
+            ly = y + ph + 12
+            dot = _swatch(img, label)
+            d.ellipse((x + 4, ly + 6, x + 26, ly + 28), fill=dot, outline=(200, 190, 175))
+            d.text((x + 36, ly + 2), label, font=fc, fill=INK)
             code = (it.get("code") or "").strip()
-            d.text((x + 4, y + ph + 10), label, font=fc, fill=INK)
             if code:
-                d.text((x + cw - 4 - d.textlength(code, font=fs), y + ph + 10), code, font=fs, fill=MUTED)
-        y += ph + cap + 34
+                d.text((x + cw - d.textlength(code, font=fcode), ly + 7), code, font=fcode, fill=MUTED)
+        y += ph + cap + 56
     return pages
 
 
@@ -262,7 +371,7 @@ def build_pdf(cat: dict, photo_dir: Path, shop: str, logo_path: Optional[Path] =
     rows = 3 if cols == 3 else 2
     per_page = cols * rows
     gap = 26
-    top, bottom = MARGIN + 70, PAGE_H - 110
+    top, bottom = 170, PAGE_H - 120
     cw = (PAGE_W - 2 * MARGIN - (cols - 1) * gap) // cols
     ch = (bottom - top - (rows - 1) * gap) // rows
 
@@ -292,23 +401,19 @@ def build_pdf(cat: dict, photo_dir: Path, shop: str, logo_path: Optional[Path] =
         chunks = [items[i:i + per_page] for i in range(0, len(items), per_page)] or [[]]
         fh = _font(30, True)
         for chunk in chunks:
-            page = Image.new("RGB", (PAGE_W, PAGE_H), "white")
+            page = Image.new("RGB", (PAGE_W, PAGE_H), CREAM)
             d = ImageDraw.Draw(page)
-            d.text((MARGIN, MARGIN), cat.get("title") or shop, font=fh, fill=INK)
+            d.rectangle((0, 0, PAGE_W, 120), fill=MAROON)
+            d.rectangle((0, 120, PAGE_W, 126), fill=GOLD)
+            _centre(d, 38, cat.get("title") or shop, _serif(40), GOLD_LIGHT)
             for k, it in enumerate(chunk):
                 r, c = divmod(k, cols)
                 page.paste(_card(it, photo(it), cw, ch), (MARGIN + c * (cw + gap), top + r * (ch + gap)))
             body.append(page)
     pages = [cover, *body]
-    if n_designs:
-        # the cover counts designs, not photos
-        cd = ImageDraw.Draw(cover)
-        f = _font(28)
-        cd.rectangle((0, PAGE_H - 210, PAGE_W, PAGE_H - 160), fill=(252, 249, 244))
-        meta = f"{n_designs} design{'s' if n_designs != 1 else ''} · {len(items)} colours · {time.strftime('%d %B %Y')}"
-        cd.text(((PAGE_W - cd.textlength(meta, font=f)) / 2, PAGE_H - 200), meta, font=f, fill=MUTED)
     for i, pg in enumerate(pages, start=1):
-        _footer(ImageDraw.Draw(pg), shop, i, len(pages))
+        if i > 1:
+            _footer(ImageDraw.Draw(pg), shop, i, len(pages), cat.get("contact", ""))
     buf = io.BytesIO()
     pages[0].save(buf, "PDF", resolution=150.0, save_all=True, append_images=pages[1:])
     return buf.getvalue()

@@ -570,6 +570,7 @@ export interface Catalogue {
   columns: 2 | 3;
   layout: "grid" | "designs";
   product: string;
+  contact?: string;
   hint: string;
   status: "running" | "done";
   done: number;
@@ -594,7 +595,7 @@ export interface FolderResult {
   catalogues: { id: string; title: string; photos: number; designs: number; saved: string[]; notes: string[] }[];
 }
 
-export type CatalogueEdit = Partial<Pick<Catalogue, "title" | "subtitle" | "columns" | "layout" | "product">> & {
+export type CatalogueEdit = Partial<Pick<Catalogue, "title" | "subtitle" | "columns" | "layout" | "product" | "contact">> & {
   items?: (Partial<Pick<CatalogueItem, "name" | "description" | "price" | "code" | "include" | "colour">> & { id: number })[];
 };
 

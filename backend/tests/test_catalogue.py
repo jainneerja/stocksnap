@@ -116,7 +116,7 @@ def test_from_shop_folder(client, tmp_path):
     blue = by_file["Size 4/Design 1 - Rs 70/Blue.jpg"]
     assert (blue["size"], blue["design"], blue["price"], blue["colour"]) == ("4", "Design 1", "₹70", "Blue")
     assert by_file["Size 4/Design 1 - Rs 70/Ladoo Gopal Blue.jpg"]["colour"] == "Blue (on idol)"
-    assert cat["cover"] == "cover.jpg" and cat["subtitle"] == "Sizes 4 to 5 · 3 colours · 3 designs"
+    assert cat["cover"] == "cover.jpg" and cat["subtitle"] == ""
     assert client.get(f"/api/catalogues/{first['id']}/photos/cover.jpg").status_code == 200
     assert client.get(f"/api/catalogues/{first['id']}/pdf?prices=false").content[:4] == b"%PDF"
 

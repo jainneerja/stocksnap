@@ -266,7 +266,7 @@ def from_folder(body: FolderRequest, request: Request):
                                 for it in items if not it["price"] and it["design"]})
         if missing_price:
             notes.append("No price in the folder name for: " + ", ".join(missing_price))
-        cat = {"id": cat_id, "created": time.time(), "title": c["product"], "subtitle": cover_line(items),
+        cat = {"id": cat_id, "created": time.time(), "title": c["product"], "subtitle": "",
                "columns": 3, "hint": c["product"], "clean_background": False, "describe": False,
                "status": "done", "done": len(items), "total": len(items), "notes": notes, "mode": "",
                "items": items, "product": c["product"], "layout": "designs", "cover": cover,
@@ -303,6 +303,7 @@ class CatalogueEdit(BaseModel):
     columns: Optional[int] = Field(default=None, ge=2, le=3)
     layout: Optional[str] = Field(default=None, pattern="^(grid|designs)$")
     product: Optional[str] = Field(default=None, max_length=80)
+    contact: Optional[str] = Field(default=None, max_length=80)
     items: list[ItemEdit] = Field(default_factory=list, max_length=MAX_FILES)
 
 
@@ -328,7 +329,7 @@ def get_catalogue(cat_id: str, request: Request):
 def edit_catalogue(cat_id: str, body: CatalogueEdit, request: Request):
     d = _dir(request, cat_id)
     cat = _read(d)
-    for k in ("title", "subtitle", "columns", "layout", "product"):
+    for k in ("title", "subtitle", "columns", "layout", "product", "contact"):
         v = getattr(body, k)
         if v is not None:
             cat[k] = v.strip() if isinstance(v, str) else v

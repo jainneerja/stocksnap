@@ -104,6 +104,7 @@ export function CataloguePage({ toast }: { toast: (m: string) => void }) {
     try {
       const saved = await catalogues.update(cat.id, {
         title: cat.title, subtitle: cat.subtitle, columns: cat.columns, layout: cat.layout, product: cat.product,
+        contact: cat.contact ?? "",
         items: cat.items.map(({ id, name, description, price, code, include, colour }) => ({ id, name, description, price, code, include, colour })),
       });
       setCat(saved);
@@ -155,8 +156,11 @@ export function CataloguePage({ toast }: { toast: (m: string) => void }) {
 
         <div className="cat-settings">
           <label>Title<input value={cat.title} onChange={(e) => edit({ title: e.target.value })} maxLength={100} /></label>
-          <label>Line under the title (contact, offer…)
-            <input value={cat.subtitle} placeholder="Order on WhatsApp: +91 …" onChange={(e) => edit({ subtitle: e.target.value })} maxLength={200} />
+          <label>Line under the title on the cover <span className="muted small">(optional, e.g. an offer)</span>
+            <input value={cat.subtitle} placeholder="Diwali collection" onChange={(e) => edit({ subtitle: e.target.value })} maxLength={200} />
+          </label>
+          <label>Contact at the bottom of every page <span className="muted small">(optional)</span>
+            <input value={cat.contact ?? ""} placeholder="WhatsApp +91 …" onChange={(e) => edit({ contact: e.target.value })} maxLength={80} />
           </label>
           <div className="cat-row">
             <span className="small">Layout</span>
@@ -340,7 +344,7 @@ export function CataloguePage({ toast }: { toast: (m: string) => void }) {
 function mergeFresh(local: Catalogue, fresh: Catalogue, dirty: boolean): Catalogue {
   if (!dirty) return fresh;
   return {
-    ...fresh, title: local.title, subtitle: local.subtitle, columns: local.columns, layout: local.layout, product: local.product,
+    ...fresh, title: local.title, subtitle: local.subtitle, columns: local.columns, layout: local.layout, product: local.product, contact: local.contact,
     items: fresh.items.map((f) => {
       const l = local.items.find((x) => x.id === f.id);
       if (!l) return f;
