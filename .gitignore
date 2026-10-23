@@ -12,3 +12,7 @@ frontend/dist/
 .DS_Store
 Thumbs.db
 *.tsbuildinfo
+
+# seller product photos and catalogues (kept out of the repo)
+Product Images/
+Product Images.zip
