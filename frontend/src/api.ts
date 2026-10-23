@@ -545,3 +545,62 @@ export const listing = {
   fileUrl: (id: string, name: string) => `/api/listing-photos/${id}/files/${name}`,
   zipUrl: (id: string) => `/api/listing-photos/${id}/zip`,
 };
+
+// ---- product catalogue (a folder of photos -> PDF)
+export interface CatalogueItem {
+  id: number;
+  file: string;
+  photo: string;
+  name: string;
+  description: string;
+  price: string;
+  code: string;
+  include: boolean;
+  status: "queued" | "ready" | "failed";
+}
+
+export interface Catalogue {
+  id: string;
+  created: number;
+  title: string;
+  subtitle: string;
+  columns: 2 | 3;
+  hint: string;
+  status: "running" | "done";
+  done: number;
+  total: number;
+  notes: string[];
+  mode: string;
+  items: CatalogueItem[];
+}
+
+export interface CatalogueSummary {
+  id: string;
+  title: string;
+  created: number;
+  total: number;
+  status: string;
+  cover: string | null;
+}
+
+export type CatalogueEdit = Partial<Pick<Catalogue, "title" | "subtitle" | "columns">> & {
+  items?: (Partial<Pick<CatalogueItem, "name" | "description" | "price" | "code" | "include">> & { id: number })[];
+};
+
+export const catalogues = {
+  list: () => req<CatalogueSummary[]>("/api/catalogues"),
+  create: (files: File[], opts: { title: string; hint: string; clean_background: boolean; describe: boolean }) => {
+    const fd = new FormData();
+    for (const f of files) fd.append("files", f, f.name);
+    fd.append("title", opts.title);
+    fd.append("hint", opts.hint);
+    fd.append("clean_background", String(opts.clean_background));
+    fd.append("describe", String(opts.describe));
+    return req<Catalogue>("/api/catalogues", { method: "POST", body: fd });
+  },
+  get: (id: string) => req<Catalogue>(`/api/catalogues/${id}`),
+  update: (id: string, data: CatalogueEdit) => req<Catalogue>(`/api/catalogues/${id}`, json("PUT", data)),
+  remove: (id: string) => req<void>(`/api/catalogues/${id}`, { method: "DELETE" }),
+  photoUrl: (id: string, photo: string) => `/api/catalogues/${id}/photos/${photo}`,
+  pdfUrl: (id: string) => `/api/catalogues/${id}/pdf`,
+};

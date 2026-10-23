@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, bulk, logoUrl, shops, type Health, type Preset, type Shop } from "./api";
 import { BulkPage } from "./pages/BulkPage";
+import { CataloguePage } from "./pages/CataloguePage";
 import { InventoryPage } from "./pages/InventoryPage";
 import { LabPage } from "./pages/LabPage";
 import { ReportsPage } from "./pages/ReportsPage";
@@ -15,6 +16,7 @@ const TABS = [
   { id: "sell", label: "Sell" },
   { id: "inventory", label: "Inventory" },
   { id: "photos", label: "Photos" },
+  { id: "catalogue", label: "Catalogue" },
   { id: "reports", label: "Money" },
 ] as const;
 type Tab = (typeof TABS)[number]["id"] | "settings" | "new-shop";
@@ -166,6 +168,7 @@ export function App() {
           {tab === "inventory" && <InventoryPage toast={toast} />}
           {tab === "reports" && <ReportsPage toast={toast} />}
           {tab === "photos" && <LabPage toast={toast} />}
+          {tab === "catalogue" && <CataloguePage toast={toast} />}
           {tab === "settings" && (
             <ShopSetupPage
               existing={current}

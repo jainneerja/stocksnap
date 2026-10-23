@@ -68,6 +68,18 @@ After a **bulk add**, *Listing photos* puts every saved product into your scenes
 
 It's image processing, not generative AI: about half a second per image on any laptop, and the product is always the seller's real photo, so colours and embroidery are exact.
 
+## Product catalogue from a folder of photos
+
+Put one photo per product in a folder (the file name can be the product's name, e.g.
+`red-leaves-dress.jpg`; camera names like `IMG_2041.jpg` are fine too). In the
+**Catalogue** tab, pick the folder and say what the products are ("Laddu Gopal dresses").
+StockSnap writes a name and short description for each photo with the shop's own
+description settings (instant templates, fast AI or detailed AI; with the AI off it
+uses templates), you add prices (or one price for all), codes and a contact line, and
+download a **PDF catalogue**: a cover page with your logo, then 4 big or 9 small product
+cards per page. Optionally the products are cut out onto a clean white background.
+Your photos are not moved or changed; the app keeps its own copy.
+
 ## Tell the AI what you sell
 
 A small vision model only sees shapes and colours, so it can call a round embroidered outfit a "hat". You can tell it what your items really are, in your own words, in three places:

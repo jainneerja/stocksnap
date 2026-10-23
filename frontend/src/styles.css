@@ -55,7 +55,7 @@ header { display: flex; align-items: center; justify-content: space-between; pad
 
 /* bottom tab bar: thumb-friendly on phones */
 .tabs {
-  position: fixed; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(6, 1fr);
+  position: fixed; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
   background: var(--surface); border-top: 1px solid var(--line); padding: 6px max(6px, env(safe-area-inset-left)) calc(6px + env(safe-area-inset-bottom));
 }
 .tabs button { font: inherit; font-weight: 600; background: none; border: 0; padding: 14px 4px; border-radius: 10px; color: var(--muted); cursor: pointer; }
@@ -402,3 +402,15 @@ label.inline select { width: auto; }
 .auto-setup summary { cursor: pointer; }
 .auto-setup label { display: grid; gap: 4px; }
 .auto-setup ul { margin: 0; padding-left: 18px; }
+
+/* ---- catalogue */
+.cat-settings { display: grid; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; margin: 10px 0; }
+.cat-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.cat-items { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.cat-item { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.cat-item.off { opacity: .5; }
+.cat-item img { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; background: var(--bg); }
+.cat-fields { display: flex; flex-direction: column; gap: 6px; padding: 10px; }
+.cat-price { flex: 1 1 90px; min-width: 0; }
+.cat-code { flex: 1 1 90px; min-width: 0; }
+@media (max-width: 520px) { .tabs button { font-size: .74rem; padding: 12px 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }
