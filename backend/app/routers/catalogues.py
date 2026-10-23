@@ -27,7 +27,7 @@ from PIL import Image
 from pydantic import BaseModel, Field
 
 from ..db import current_shop
-from ..services.catalogue import build_pdf, name_from_file, parse_path
+from ..services.catalogue import build_pdf, cover_line, name_from_file, parse_path, scan_shop
 from ..services.imagelab import _solid, compose
 from ..services.images import load_image
 from ..services.listing import Known, describe_item
@@ -194,6 +194,99 @@ def _prepare(vision, cutter, style, info, d: Path) -> None:
     _write(d, latest)
 
 
+class FolderRequest(BaseModel):
+    path: str = Field(min_length=1, max_length=500)
+    save_to_folder: bool = True   # also write the two PDFs into each product folder
+
+
+def _pdf_name(title: str, prices: bool) -> str:
+    safe = re.sub(r'[<>:"/\\|?*]+', "", title).strip() or "Catalogue"
+    return f"{safe} - catalogue ({'with' if prices else 'without'} prices).pdf"
+
+
+@router.post("/from-folder", status_code=201)
+def from_folder(body: FolderRequest, request: Request):
+    """Read a shop folder on this computer and make one catalogue per product folder:
+
+        <Shop name (Owner)>/<Catalogue 1 - Product>/front_page.jpg
+                                                   /Size 4/Design 1 - Rs 70/Red.jpg
+
+    For each product: a PDF with prices and one without, saved into the product
+    folder (and downloadable). Nothing in the folder is changed or moved."""
+    root = Path(body.path.strip().strip('"')).expanduser()
+    if not root.is_dir():
+        raise HTTPException(400, f"Can't find the folder {root}. Copy its path from File Explorer (Shift + right-click → Copy as path).")
+    try:
+        found = scan_shop(root)
+    except OSError as exc:
+        raise HTTPException(400, f"Can't read that folder: {exc}")
+    if not found["catalogues"]:
+        raise HTTPException(400, "No product photos found. Expected folders like "
+                                 "Catalogue 1 - Ladoo Gopal / Size 4 / Design 1 - Rs 70 / Red.jpg")
+    shop = current_shop(request)
+    logo = request.app.state.shops.logo_path(shop.info.slug) if shop.info.has_logo else None
+    made = []
+    for c in found["catalogues"]:
+        if len(c["items"]) > MAX_FILES:
+            raise HTTPException(400, f"{c['product']}: up to {MAX_FILES} photos per catalogue.")
+        cat_id = uuid.uuid4().hex[:12]
+        d = _root(request) / cat_id
+        (d / "photos").mkdir(parents=True)
+        notes, items = [], []
+        prefix = re.sub(r"[^A-Z]", "", "".join(w[:1] for w in c["product"].upper().split()))[:3] or "P"
+        for src in c["items"]:
+            try:
+                img = load_image(src["path"].read_bytes())
+            except Exception:  # noqa: BLE001
+                notes.append(f"{src['path'].name}: not a photo the app can read")
+                continue
+            img.thumbnail((1600, 1600))
+            n = len(items) + 1
+            photo = f"{n:03d}.jpg"
+            img.save(d / "photos" / photo, "JPEG", quality=90)
+            rel = str(src["path"].relative_to(c["folder"]))
+            items.append({"id": n, "file": rel, "photo": photo, "original": photo,
+                          "name": " ".join(x for x in (c["product"], src["design"], src["colour"],
+                                                       f"(size {src['size']})" if src["size"] else "") if x),
+                          "description": "", "price": src["price"], "code": f"{prefix}-{n:03d}",
+                          "include": True, "status": "ready", "size": src["size"], "design": src["design"],
+                          "colour": src["colour"]})
+        cover = None
+        if c["cover"] is not None:
+            try:
+                ci = load_image(c["cover"].read_bytes())
+                ci.thumbnail((2000, 2000))
+                cover = "cover.jpg"
+                ci.save(d / "photos" / cover, "JPEG", quality=92)
+                if min(ci.size) < 800:
+                    notes.append(f"{c['cover'].name} is small ({ci.size[0]}×{ci.size[1]} px); a bigger photo will look sharper on the cover.")
+            except Exception:  # noqa: BLE001
+                notes.append(f"{c['cover'].name}: not a photo the app can read")
+        missing_price = sorted({f"{it['design']}" + (f" (size {it['size']})" if it["size"] else "")
+                                for it in items if not it["price"] and it["design"]})
+        if missing_price:
+            notes.append("No price in the folder name for: " + ", ".join(missing_price))
+        cat = {"id": cat_id, "created": time.time(), "title": c["product"], "subtitle": cover_line(items),
+               "columns": 3, "hint": c["product"], "clean_background": False, "describe": False,
+               "status": "done", "done": len(items), "total": len(items), "notes": notes, "mode": "",
+               "items": items, "product": c["product"], "layout": "designs", "cover": cover,
+               "shop": found["shop"], "owner": found["owner"], "source": str(c["folder"])}
+        _write(d, cat)
+        saved = []
+        if body.save_to_folder:
+            for prices in (True, False):
+                target = c["folder"] / _pdf_name(c["product"], prices)
+                try:
+                    target.write_bytes(build_pdf(cat, d / "photos", shop.info.name, logo, show_prices=prices))
+                    saved.append(str(target))
+                except OSError as exc:
+                    notes.append(f"Couldn't save {target.name} into the folder: {exc}")
+            _write(d, cat)
+        made.append({"id": cat_id, "title": c["product"], "photos": len(items),
+                     "designs": len({(it["size"], it["design"]) for it in items}), "saved": saved, "notes": notes})
+    return {"shop": found["shop"], "owner": found["owner"], "catalogues": made}
+
+
 class ItemEdit(BaseModel):
     id: int
     name: Optional[str] = Field(default=None, max_length=120)
@@ -254,15 +347,15 @@ def edit_catalogue(cat_id: str, body: CatalogueEdit, request: Request):
 
 
 @router.get("/{cat_id}/pdf")
-def catalogue_pdf(cat_id: str, request: Request):
+def catalogue_pdf(cat_id: str, request: Request, prices: bool = True):
     d = _dir(request, cat_id)
     cat = _read(d)
     shop = current_shop(request)
     if not any(it.get("include", True) and it["status"] != "failed" for it in cat["items"]):
         raise HTTPException(400, "No products selected for the catalogue.")
     logo = request.app.state.shops.logo_path(shop.info.slug) if shop.info.has_logo else None
-    pdf = build_pdf(cat, d / "photos", shop.info.name, logo)
-    safe = re.sub(r"[^A-Za-z0-9_-]+", "-", cat["title"]).strip("-")[:50] or "catalogue"
+    pdf = build_pdf(cat, d / "photos", shop.info.name, logo, show_prices=prices)
+    safe = (re.sub(r"[^A-Za-z0-9_-]+", "-", cat["title"]).strip("-")[:50] or "catalogue") + ("" if prices else "-no-prices")
     return Response(pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="{safe}.pdf"'})
 
@@ -271,7 +364,7 @@ def catalogue_pdf(cat_id: str, request: Request):
 def catalogue_photo(cat_id: str, name: str, request: Request):
     d = _dir(request, cat_id)
     path = d / "photos" / name
-    if not re.fullmatch(r"[0-9]{3}(-white)?\.jpg", name) or not path.is_file():
+    if not re.fullmatch(r"([0-9]{3}(-white)?|cover)\.jpg", name) or not path.is_file():
         raise HTTPException(404, "Photo not found")
     return FileResponse(path, headers={"Cache-Control": "max-age=86400"})
 

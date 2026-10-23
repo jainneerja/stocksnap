@@ -106,7 +106,7 @@ def _footer(d: ImageDraw.ImageDraw, shop: str, page: int, total: int) -> None:
 
 
 def _cover(shop: str, title: str, subtitle: str, count: int, logo: Optional[Image.Image],
-           first: Optional[Image.Image]) -> Image.Image:
+           first: Optional[Image.Image], owner: str = "") -> Image.Image:
     page = Image.new("RGB", (PAGE_W, PAGE_H), (252, 249, 244))
     d = ImageDraw.Draw(page)
     y = 170
@@ -114,7 +114,11 @@ def _cover(shop: str, title: str, subtitle: str, count: int, logo: Optional[Imag
         lg = ImageOps.contain(logo.convert("RGBA"), (260, 260))
         page.paste(lg, ((PAGE_W - lg.width) // 2, y), lg)
         y += lg.height + 50
-    for text, size, bold, colour, gap in ((shop, 64, True, INK, 30), (title, 46, False, ACCENT, 24)):
+    lines = [(shop, 64, True, INK, 30 if not owner else 6)]
+    if owner:
+        lines.append((owner, 32, False, MUTED, 30))
+    lines.append((title, 46, False, ACCENT, 24))
+    for text, size, bold, colour, gap in lines:
         f = _font(size, bold)
         for line in _wrap(d, text, f, PAGE_W - 2 * MARGIN, 2):
             d.text(((PAGE_W - d.textlength(line, font=f)) / 2, y), line, font=f, fill=colour)
@@ -246,9 +250,14 @@ def _design_pages(cat: dict, items: list[dict], photo, shop: str) -> list[Image.
     return pages
 
 
-def build_pdf(cat: dict, photo_dir: Path, shop: str, logo_path: Optional[Path] = None) -> bytes:
-    """cat: {title, subtitle, columns, items:[{photo, name, price, code, description, include}]}"""
+def build_pdf(cat: dict, photo_dir: Path, shop: str, logo_path: Optional[Path] = None,
+              show_prices: bool = True) -> bytes:
+    """cat: {title, subtitle, columns, layout, cover, owner, items:[{photo, name, price, code, ...}]}
+    show_prices=False gives the same catalogue without any price (e.g. for resellers)."""
     items = [it for it in cat["items"] if it.get("include", True) and it.get("status") != "failed"]
+    if not show_prices:
+        items = [{**it, "price": ""} for it in items]
+    shop = cat.get("shop") or shop
     cols = 3 if cat.get("columns") == 3 else 2
     rows = 3 if cols == 3 else 2
     per_page = cols * rows
@@ -267,8 +276,13 @@ def build_pdf(cat: dict, photo_dir: Path, shop: str, logo_path: Optional[Path] =
         except OSError:
             logo = None
     designs = cat.get("layout") == "designs"
+    cover_img = None
+    if cat.get("cover") and (photo_dir / cat["cover"]).is_file():
+        cover_img = Image.open(photo_dir / cat["cover"]).convert("RGB")
+    elif items:
+        cover_img = photo(items[0])
     cover = _cover(shop, cat.get("title") or "Catalogue", cat.get("subtitle") or "", len(items), logo,
-                   photo(items[0]) if items else None)
+                   cover_img, cat.get("owner", ""))
     if designs:
         n_designs = len(_groups(items))
         body = _design_pages(cat, items, photo, shop)
@@ -298,3 +312,124 @@ def build_pdf(cat: dict, photo_dir: Path, shop: str, logo_path: Optional[Path] =
     buf = io.BytesIO()
     pages[0].save(buf, "PDF", resolution=150.0, save_all=True, append_images=pages[1:])
     return buf.getvalue()
+
+
+# ---------------------------------------------------------------- catalogues from a folder on this PC
+
+COVER_NAMES = {"front_page", "front", "main_image", "main", "cover", "cover_page", "first_page"}
+PRICE_RE = re.compile(r"(?:rs\.?|inr|₹)\s*([0-9][0-9,]*(?:\.[0-9]+)?)|[-–]\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*$", re.I)
+CATALOGUE_PREFIX = re.compile(r"^\s*catal\w*\s*\d*\s*[-–:.]?\s*", re.I)
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".heic", ".heif"}
+
+
+def split_owner(folder_name: str) -> tuple[str, str]:
+    """'Ekaa Creations (Anjana Aggarwal)' -> ('Ekaa Creations', 'Anjana Aggarwal')."""
+    m = re.match(r"^\s*(.*?)\s*\(([^()]*)\)\s*$", folder_name)
+    return (m.group(1), m.group(2).strip()) if m else (folder_name.strip(), "")
+
+
+def product_name(folder_name: str) -> str:
+    """'Catalogue 1 -  Ladoo Gopal' -> 'Ladoo Gopal'."""
+    name = CATALOGUE_PREFIX.sub("", folder_name).strip(" -–")
+    return re.sub(r"\s+", " ", name) or folder_name.strip()
+
+
+def design_and_price(folder_name: str) -> tuple[str, str]:
+    """'Design 1 - Rs 70' -> ('Design 1', '₹70'); 'Design 2' -> ('Design 2', '')."""
+    m = PRICE_RE.search(folder_name)
+    price = ""
+    name = folder_name
+    if m:
+        price = "₹" + (m.group(1) or m.group(2)).replace(",", "")
+        name = folder_name[:m.start()]
+    name = re.sub(r"\s+", " ", name).strip(" -–:")
+    d = DESIGN_DIR.match(name)
+    return (f"Design {d.group(1)}" if d else name), price
+
+
+def _is_image(p: Path) -> bool:
+    return p.is_file() and p.suffix.lower() in IMAGE_EXTS and not p.name.startswith((".", "_"))
+
+
+def _colour_label(filename: str, product: str) -> tuple[str, bool]:
+    """Colour from the file name; product words are dropped ('Ladoo Gopal Blue' -> 'Blue').
+    Returns (label, on_idol) - on_idol when the product's name was in the file name."""
+    label = name_from_file(filename)
+    words = {w.lower() for w in re.findall(r"\w+", product)} | {"laddu", "ladoo", "gopal", "idol"}
+    kept = [w for w in label.split() if w.lower() not in words]
+    on_idol = len(kept) < len(label.split())
+    label = " ".join(kept)
+    return (label[:1].upper() + label[1:]) if label else "", on_idol
+
+
+def scan_product(folder: Path) -> dict:
+    """One product folder -> {product, folder, cover, items}. Items come from
+    [Size X/]Design Y - Rs P/<Colour>.jpg (sizes optional)."""
+    product = product_name(folder.name)
+    cover = next((p for p in sorted(folder.iterdir()) if _is_image(p) and p.stem.lower() in COVER_NAMES), None)
+    items = []
+
+    def walk(d: Path, size: str):
+        for sub in sorted((x for x in d.iterdir() if x.is_dir() and not x.name.startswith((".", "_"))),
+                          key=lambda x: _natural_key(x.name)):
+            m = SIZE_DIR.match(sub.name.strip())
+            if m:
+                walk(sub, m.group(1).replace(" ", ""))
+                continue
+            design, price = design_and_price(sub.name)
+            photos = sorted((p for p in sub.iterdir() if _is_image(p)), key=lambda p: _natural_key(p.name))
+            for p in photos:
+                colour, on_idol = _colour_label(p.name, product)
+                items.append({"path": p, "size": size, "design": design, "price": price,
+                              "colour": (f"{colour} (on idol)" if on_idol and colour else colour)})
+            walk(sub, size)  # deeper folders (rare)
+
+    walk(folder, "")
+    # loose photos (no design folder) are products of their own
+    for p in sorted((p for p in folder.iterdir() if _is_image(p) and p != cover), key=lambda p: _natural_key(p.name)):
+        colour, _ = _colour_label(p.name, product)
+        items.append({"path": p, "size": "", "design": "", "price": "", "colour": colour})
+    return {"product": product, "folder": folder, "cover": cover, "items": items}
+
+
+def scan_shop(root: Path) -> dict:
+    """Shop folder -> {shop, owner, catalogues: [...]}; a product folder works too."""
+    def looks_like_product(d: Path) -> bool:
+        return any(_is_image(p) and p.stem.lower() in COVER_NAMES for p in d.iterdir()) or any(
+            x.is_dir() and (SIZE_DIR.match(x.name.strip()) or DESIGN_DIR.match(design_and_price(x.name)[0]))
+            for x in d.iterdir())
+
+    if looks_like_product(root):
+        shop, owner = split_owner(root.parent.name)
+        products = [root]
+    else:
+        shop, owner = split_owner(root.name)
+        products = sorted((x for x in root.iterdir() if x.is_dir() and not x.name.startswith((".", "_"))),
+                          key=lambda x: _natural_key(x.name))
+    cats = [c for c in (scan_product(p) for p in products) if c["items"]]
+    return {"shop": shop, "owner": owner, "catalogues": cats}
+
+
+def _natural_key(name: str):
+    return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", name)]
+
+
+def cover_line(items: list[dict]) -> str:
+    """'Sizes 4 to 5 · 8 colours · 2 designs'"""
+    sizes = list(dict.fromkeys(it["size"] for it in items if it.get("size")))
+    designs = {(it.get("size"), it.get("design")) for it in items if it.get("design")}
+    parts = []
+    if sizes:
+        nums = [s for s in sizes if s.isdigit()]
+        if len(sizes) == 1:
+            parts.append(f"Size {sizes[0]}")
+        elif len(nums) == len(sizes):
+            parts.append(f"Sizes {min(map(int, nums))} to {max(map(int, nums))}")
+        else:
+            parts.append("Sizes " + ", ".join(sizes))
+    colours = {it.get("colour", "").replace(" (on idol)", "") for it in items if it.get("colour")}
+    if colours:
+        parts.append(f"{len(colours)} colour{'s' if len(colours) != 1 else ''}")
+    if designs:
+        parts.append(f"{len(designs)} design{'s' if len(designs) != 1 else ''}")
+    return " · ".join(parts)

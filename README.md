@@ -80,6 +80,22 @@ download a **PDF catalogue**: a cover page with your logo, then 4 big or 9 small
 cards per page. Optionally the products are cut out onto a clean white background.
 Your photos are not moved or changed; the app keeps its own copy.
 
+**From a shop folder (recommended).** Lay the photos out like this, paste the shop folder's
+path into the Catalogue tab and click *Make catalogues*:
+
+```
+Ekaa Creations (Anjana Aggarwal)\          shop name (owner in brackets, optional)
+  Catalogue 1 - Ladoo Gopal\               one catalogue per folder
+    front_page.jpg                          cover photo (or main_image / cover)
+    Size 4\                                optional
+      Design 1 - Rs 70\                    design and its price
+        Blue.jpg  Pink.jpg  Red.jpg         one photo per colour, named by colour
+```
+
+For every catalogue folder the app makes two PDFs, **with prices** and **without prices**,
+and saves them into that folder. It reads the folder on this computer directly (nothing is
+uploaded, moved or changed). A design folder without a price is listed in the notes.
+
 **Folders for sizes, designs and colours.** Sort the photos like
 `Lehenga Patka/Size 7/Design 2/Light Pink.jpg` and the catalogue groups them: one block
 per design and size, with every colour's photo labelled underneath ("By design" layout).

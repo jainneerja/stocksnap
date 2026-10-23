@@ -414,3 +414,7 @@ label.inline select { width: auto; }
 .cat-price { flex: 1 1 90px; min-width: 0; }
 .cat-code { flex: 1 1 90px; min-width: 0; }
 @media (max-width: 520px) { .tabs button { font-size: .74rem; padding: 12px 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }
+.folder-example { margin: 0; padding: 10px 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; font-size: .82rem; overflow-x: auto; line-height: 1.45; }
+.folder-result { display: grid; gap: 10px; background: var(--brand-soft); border-radius: 12px; padding: 10px 12px; }
+.folder-result p { margin: 0; }
+.folder-cat { display: grid; gap: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }

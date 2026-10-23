@@ -82,3 +82,46 @@ def test_folders_give_size_design_colour(client):
     client.put(f"/api/catalogues/{c['id']}", json={"items": [{"id": first["id"], "price": "₹350"}]})
     pdf = client.get(f"/api/catalogues/{c['id']}/pdf")
     assert pdf.content[:4] == b"%PDF"
+
+
+def _jpg(path, colour):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (300, 300), colour).save(path, "JPEG")
+
+
+def test_from_shop_folder(client, tmp_path):
+    shop = tmp_path / "Ekaa Creations (Anjana Aggarwal)"
+    lg = shop / "Catalogue 1 -  Ladoo Gopal"
+    _jpg(lg / "front_page.jpg", (250, 200, 200))
+    _jpg(lg / "Size 4" / "Design 1 - Rs 70" / "Blue.jpg", (30, 60, 200))
+    _jpg(lg / "Size 4" / "Design 1 - Rs 70" / "Ladoo Gopal Blue.jpg", (30, 60, 220))
+    _jpg(lg / "Size 4" / "Design 2 - Rs 200" / "Pink.jpg", (230, 80, 160))
+    _jpg(lg / "Size 5" / "Design 1" / "Red.jpg", (220, 30, 30))
+    _jpg(shop / "Catalogue 2 - Lehenga Patka" / "Size 7" / "Design 2 - Rs 140" / "Dark Pink.jpg", (200, 20, 120))
+
+    r = client.post("/api/catalogues/from-folder", json={"path": str(shop)})
+    assert r.status_code == 201, r.text
+    out = r.json()
+    assert (out["shop"], out["owner"]) == ("Ekaa Creations", "Anjana Aggarwal")
+    assert [c["title"] for c in out["catalogues"]] == ["Ladoo Gopal", "Lehenga Patka"]
+    first = out["catalogues"][0]
+    assert first["photos"] == 4 and first["designs"] == 3
+    assert any("No price" in n and "Design 1 (size 5)" in n for n in first["notes"])
+    assert sorted(p.split("(")[-1] for p in first["saved"]) == ["with prices).pdf", "without prices).pdf"]
+    with_p = lg / "Ladoo Gopal - catalogue (with prices).pdf"
+    assert with_p.read_bytes()[:4] == b"%PDF" and (lg / "Ladoo Gopal - catalogue (without prices).pdf").is_file()
+
+    cat = client.get(f"/api/catalogues/{first['id']}").json()
+    by_file = {it["file"].replace("\\\\", "/"): it for it in cat["items"]}
+    blue = by_file["Size 4/Design 1 - Rs 70/Blue.jpg"]
+    assert (blue["size"], blue["design"], blue["price"], blue["colour"]) == ("4", "Design 1", "₹70", "Blue")
+    assert by_file["Size 4/Design 1 - Rs 70/Ladoo Gopal Blue.jpg"]["colour"] == "Blue (on idol)"
+    assert cat["cover"] == "cover.jpg" and cat["subtitle"] == "Sizes 4 to 5 · 3 colours · 3 designs"
+    assert client.get(f"/api/catalogues/{first['id']}/photos/cover.jpg").status_code == 200
+    assert client.get(f"/api/catalogues/{first['id']}/pdf?prices=false").content[:4] == b"%PDF"
+
+
+def test_from_folder_errors(client, tmp_path):
+    assert client.post("/api/catalogues/from-folder", json={"path": str(tmp_path / "nope")}).status_code == 400
+    (tmp_path / "empty").mkdir()
+    assert client.post("/api/catalogues/from-folder", json={"path": str(tmp_path / "empty")}).status_code == 400

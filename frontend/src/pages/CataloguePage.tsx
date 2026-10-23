@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { catalogues, type Catalogue, type CatalogueItem, type CatalogueSummary } from "../api";
+import { catalogues, type Catalogue, type CatalogueItem, type CatalogueSummary, type FolderResult } from "../api";
 import { useShop } from "../shop";
 
 const IMAGE = /\.(jpe?g|png|webp|heic|heif|bmp)$/i;
@@ -22,6 +22,25 @@ export function CataloguePage({ toast }: { toast: (m: string) => void }) {
   const [dirty, setDirty] = useState(false);
   const [allPrice, setAllPrice] = useState("");
   const folderInput = useRef<HTMLInputElement>(null);
+  const [folderPath, setFolderPath] = useState(() => {
+    try { return localStorage.getItem("stocksnap.catalogueFolder") ?? ""; } catch { return ""; }
+  });
+  const [folderBusy, setFolderBusy] = useState(false);
+  const [folderResult, setFolderResult] = useState<FolderResult | null>(null);
+
+  async function makeFromFolder() {
+    setFolderBusy(true);
+    setFolderResult(null);
+    try {
+      try { localStorage.setItem("stocksnap.catalogueFolder", folderPath); } catch { /* ignore */ }
+      setFolderResult(await catalogues.fromFolder(folderPath));
+      loadRecent();
+    } catch (e) {
+      toast((e as Error).message);
+    } finally {
+      setFolderBusy(false);
+    }
+  }
 
   const loadRecent = useCallback(() => catalogues.list().then(setRecent).catch(() => undefined), []);
   useEffect(() => { loadRecent(); }, [loadRecent]);
@@ -96,9 +115,9 @@ export function CataloguePage({ toast }: { toast: (m: string) => void }) {
     }
   }
 
-  async function download() {
+  async function download(prices: boolean) {
     if (dirty && !(await save())) return;
-    window.location.href = catalogues.pdfUrl(cat!.id);
+    window.location.href = catalogues.pdfUrl(cat!.id, prices);
   }
 
   async function remove() {
@@ -202,7 +221,8 @@ export function CataloguePage({ toast }: { toast: (m: string) => void }) {
           <span className="small muted">{included} in catalogue</span>
           <button className="link small" onClick={remove}>Delete</button>
           <button className="btn btn-secondary" disabled={!dirty} onClick={save}>Save</button>
-          <button className="btn btn-primary" disabled={!included} onClick={download}>Download PDF</button>
+          <button className="btn btn-secondary" disabled={!included} onClick={() => download(false)}>PDF without prices</button>
+          <button className="btn btn-primary" disabled={!included} onClick={() => download(true)}>PDF with prices</button>
         </div>
       </section>
     );
@@ -216,6 +236,54 @@ export function CataloguePage({ toast }: { toast: (m: string) => void }) {
       </div>
 
       <div className="item-form">
+        <h2 style={{ margin: 0 }}>From your shop folder</h2>
+        <p className="muted small" style={{ margin: 0 }}>
+          One folder per shop, one folder per catalogue inside it, a <em>front_page</em> photo for the cover,
+          and the price in each design folder's name:
+        </p>
+        <pre className="folder-example">{`Ekaa Creations (Anjana Aggarwal)\
+  Catalogue 1 - Ladoo Gopal\
+    front_page.jpg
+    Size 4\
+      Design 1 - Rs 70\
+        Blue.jpg   Pink.jpg   Red.jpg
+      Design 2 - Rs 200\  ...
+  Catalogue 2 - Lehenga Patka\  ...`}</pre>
+        <label>Shop folder on this computer
+          <input value={folderPath} placeholder="C:\Projects\Ekaa Creations (Anjana Aggarwal)"
+            onChange={(e) => setFolderPath(e.target.value)} />
+        </label>
+        <p className="muted small" style={{ margin: 0 }}>
+          Tip: in File Explorer, Shift + right-click the folder → <em>Copy as path</em>, then paste it here.
+        </p>
+        <div className="actions" style={{ marginTop: 0 }}>
+          <button className="btn btn-primary" disabled={!folderPath.trim() || folderBusy} onClick={makeFromFolder}>
+            {folderBusy ? <><span className="spinner" /> Making catalogues…</> : "Make catalogues"}
+          </button>
+        </div>
+        {folderResult && (
+          <div className="folder-result">
+            <p><strong>{folderResult.shop}</strong>{folderResult.owner && ` (${folderResult.owner})`}: {folderResult.catalogues.length} catalogue{folderResult.catalogues.length === 1 ? "" : "s"} made.</p>
+            {folderResult.catalogues.map((c) => (
+              <div key={c.id} className="folder-cat">
+                <div>
+                  <strong>{c.title}</strong> <span className="muted small">{c.designs} designs · {c.photos} photos</span>
+                  {c.saved.length > 0 && <div className="muted small">Saved in its folder: {c.saved.map((p) => p.split(/[\\/]/).pop()).join(", ")}</div>}
+                  {c.notes.map((n) => <div key={n} className="small" style={{ color: "var(--warn)" }}>{n}</div>)}
+                </div>
+                <div className="actions" style={{ marginTop: 4 }}>
+                  <a className="btn btn-secondary" href={catalogues.pdfUrl(c.id, true)}>With prices</a>
+                  <a className="btn btn-secondary" href={catalogues.pdfUrl(c.id, false)}>Without prices</a>
+                  <button className="btn btn-secondary" onClick={() => open(c.id)}>Check / edit</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="item-form" style={{ marginTop: 14 }}>
+        <h2 style={{ margin: 0 }}>Or pick photos</h2>
         <p className="muted small" style={{ margin: 0 }}>
           Put one photo per product in a folder on this computer (the file name can be the product name,
           e.g. <em>red-leaves-dress.jpg</em>). Or sort them in folders like <em>Size 7 / Design 2 / Red.jpg</em>:

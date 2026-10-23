@@ -588,6 +588,12 @@ export interface CatalogueSummary {
   cover: string | null;
 }
 
+export interface FolderResult {
+  shop: string;
+  owner: string;
+  catalogues: { id: string; title: string; photos: number; designs: number; saved: string[]; notes: string[] }[];
+}
+
 export type CatalogueEdit = Partial<Pick<Catalogue, "title" | "subtitle" | "columns" | "layout" | "product">> & {
   items?: (Partial<Pick<CatalogueItem, "name" | "description" | "price" | "code" | "include" | "colour">> & { id: number })[];
 };
@@ -611,5 +617,8 @@ export const catalogues = {
   update: (id: string, data: CatalogueEdit) => req<Catalogue>(`/api/catalogues/${id}`, json("PUT", data)),
   remove: (id: string) => req<void>(`/api/catalogues/${id}`, { method: "DELETE" }),
   photoUrl: (id: string, photo: string) => `/api/catalogues/${id}/photos/${photo}`,
-  pdfUrl: (id: string) => `/api/catalogues/${id}/pdf`,
+  pdfUrl: (id: string, prices = true) => `/api/catalogues/${id}/pdf${prices ? "" : "?prices=false"}`,
+  /** Read a shop folder on this computer; one catalogue (with and without prices) per product folder. */
+  fromFolder: (path: string) =>
+    req<FolderResult>("/api/catalogues/from-folder", json("POST", { path, save_to_folder: true })),
 };
